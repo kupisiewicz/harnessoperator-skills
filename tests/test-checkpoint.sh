@@ -138,7 +138,7 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
 done
@@ -164,7 +164,7 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)" = 000 ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook and commands removed" '[ ! -e "$IH" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ]'
+check "uninstall: hook and commands removed" '[ ! -e "$IH" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
 
@@ -178,6 +178,19 @@ done
 check "/checkpoint writes \$d/CHECKPOINT.md under ~/.claude/checkpoints" "grep -qF '\$d/CHECKPOINT.md' \"$CMDS/checkpoint.md\" && grep -qF 'd=~/.claude/checkpoints/' \"$CMDS/checkpoint.md\""
 check "/checkpoint carries forward the previous checkpoint" "grep -qi 'carry forward' \"$CMDS/checkpoint.md\""
 check "/summary reads both CHECKPOINT.md and latest.md" "grep -q 'CHECKPOINT.md' \"$CMDS/summary.md\" && grep -q 'latest.md' \"$CMDS/summary.md\""
+# /swarm: every row of the mix table must match the formula printed above it.
+swarm_ok=1; swarm_rows=0
+while IFS='|' read -r _ n s o f _; do
+  n=$((n)); s=$((s)); o=$((o)); f=$((f)); swarm_rows=$((swarm_rows+1))
+  if [ "$n" -lt 7 ]; then ef=0; else ef=$(( (n+9)/10 )); fi
+  w=$((n-ef)); es=$(( (4*w+3)/6 ))   # round(2w/3) in integer maths
+  if [ "$s/$o/$f" != "$es/$((w-es))/$ef" ]; then
+    swarm_ok=0; echo "  /swarm N=$n: table $s/$o/$f, formula $es/$((w-es))/$ef"
+  fi
+done < <(grep -E '^\| [0-9]+ \|' "$CMDS/swarm.md")
+check "/swarm mix table matches its formula ($swarm_rows rows)" '[ $swarm_ok = 1 ] && [ $swarm_rows -ge 10 ]'
+check "/swarm passes \$ARGUMENTS and pins the reviewer model" "grep -qF '\$ARGUMENTS' \"$CMDS/swarm.md\" && grep -qF 'model: \"fable\"' \"$CMDS/swarm.md\""
+
 for s in "In progress" "Not started" "State of the world" "Resume here"; do
   check "hook's required section '$s' is named in compact instructions" "grep -qF '$s' \"$REPO/compact/compact-instructions.md\" && grep -qF '\"$s\"' \"$HOOK\""
 done
