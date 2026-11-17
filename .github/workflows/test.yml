@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tool versions
+        run: bash --version | head -1; jq --version; git --version
+      - name: Tests
+        run: bash tests/test-checkpoint.sh
+      - name: Tests under stock bash 3.2
+        if: runner.os == 'macOS'
+        run: SH=/bin/bash bash tests/test-checkpoint.sh
+      - name: ShellCheck
+        if: runner.os == 'Linux'
+        run: shellcheck -S warning hooks/checkpoint.sh install.sh uninstall.sh
