@@ -4,15 +4,16 @@
 These skills make it remember.</strong></p>
 
 Skills, hooks and instructions for people who run AI coding harnesses all day, or
-build their own. Part of the **Harness Operator** project. This first release targets
-[Claude Code](https://docs.claude.com/en/docs/claude-code) and solves one problem
-well: **long sessions lose track of their work.**
+build their own. Part of the **Harness Operator** project. It targets
+[Claude Code](https://docs.claude.com/en/docs/claude-code) and starts with one problem:
+**long sessions lose track of their work.**
 
 | Skill | What it does | How it runs |
 |---|---|---|
 | **compact** | Turns every compaction into a resumable checkpoint, saves it to disk, keeps the raw transcript, and warns when the summary skipped something. | Automatic, on every `/compact` and auto-compact |
 | **`/checkpoint`** | Writes a verified, structured `CHECKPOINT.md`: done, in progress, not started, decisions, gotchas, and where to resume. | You type it |
 | **`/summary`** | Shows what's done, in progress and not started, from the latest checkpoint, checked against live git state. `/summary all` covers every project. | You type it |
+| **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
 
 ---
 
@@ -53,7 +54,7 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
@@ -121,6 +122,32 @@ to `## History`. Add a focus to put one area first: `/checkpoint only the billin
 If no checkpoint exists, `/summary` writes one first. If the code has moved on since
 the checkpoint (new commits, a branch pushed, a deploy changed), it reports the
 **drift** and offers `/checkpoint`. It never rewrites the file without asking.
+
+### `/swarm`: one line instead of a staffing paragraph
+
+Instead of typing *"start 4 Sonnet subagents for lighter tasks, 2 Opus for heavier
+ones, and a Fable to check their work"* every time, type `/swarm 6` or
+`/swarm 10 audit the billing module`.
+
+| N | Sonnet | Opus | Fable |
+|---|---|---|---|
+| 6 | 4 | 2 | 0 |
+| 7 | 4 | 2 | 1 |
+| 10 | 6 | 3 | 1 |
+| 20 | 12 | 6 | 2 |
+
+The rule: from N = 7 there is one Fable reviewer per 10 agents, rounded up. The rest
+split ⅔ Sonnet and ⅓ Opus. The full table is in [`commands/swarm.md`](commands/swarm.md),
+and a test keeps it in step with the formula.
+
+- Opus gets design, tricky logic, security and root-cause work. Sonnet gets sweeps,
+  mechanical edits, tests and docs.
+- Workers launch in parallel, and agents whose work would edit the same files are
+  merged or isolated in worktrees.
+- The reviewers start only after every worker has reported. They get the workers'
+  reports and changed paths, never the orchestrator's conclusions.
+- If the task has fewer real pieces than N, it uses fewer agents and says why. It
+  never invents busywork.
 
 ### What a checkpoint looks like
 
@@ -248,7 +275,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-78 black-box tests run the real hook, installer and uninstaller against a temporary
+80 black-box tests run the real hook, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See
