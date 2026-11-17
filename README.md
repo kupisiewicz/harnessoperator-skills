@@ -1,12 +1,14 @@
 # harnessoperator-skills
 
-<p><strong>Your agent forgets when it compacts.<br>
-These skills make it remember.</strong></p>
+<p><strong>Stop typing the same instructions.<br>
+Make each one a single command.</strong></p>
 
 Skills, hooks and instructions for people who run AI coding harnesses all day, or
 build their own. Part of the **Harness Operator** project. It targets
-[Claude Code](https://docs.claude.com/en/docs/claude-code) and starts with one problem:
-**long sessions lose track of their work.**
+[Claude Code](https://docs.claude.com/en/docs/claude-code) and solves two problems:
+
+- **Long sessions lose track of their work.** That's compact, `/checkpoint` and `/summary`.
+- **Staffing subagents takes a paragraph every time.** That's `/swarm`.
 
 | Skill | What it does | How it runs |
 |---|---|---|
