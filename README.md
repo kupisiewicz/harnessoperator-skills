@@ -193,6 +193,7 @@ and a test keeps it in step with the formula.
 ```
 ~/.claude/checkpoints/<project-slug>/
 ├── CHECKPOINT.md                     ← /checkpoint (structured, verified)
+├── CHECKPOINT-2026-03-01_120000.md   ← each earlier /checkpoint, archived on rewrite
 ├── latest.md                         ← last compact summary, scratchpad removed
 ├── 2026-03-02_184012_<session>.md    ← every compact summary, full (last 10 kept)
 └── <session>.transcript.jsonl        ← full pre-compact transcript (hardlink)
@@ -230,7 +231,7 @@ Set these in the `env` block of `~/.claude/settings.json`:
 { "env": { "HO_CHECKPOINT_KEEP": "20", "HO_CHECKPOINT_DAYS": "30" } }
 ```
 
-`CHECKPOINT.md` and `latest.md` are never pruned.
+`CHECKPOINT.md`, its archived `CHECKPOINT-<date>.md` copies and `latest.md` are never pruned.
 
 ## Safety and privacy
 

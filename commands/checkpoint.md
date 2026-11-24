@@ -13,7 +13,9 @@ Steps:
 3. **Verify** every repo touched. Report what IS, not what was planned:
    `git status -sb; git branch -vv; git log --oneline -15 --all --decorate; git log --branches --not --remotes --oneline; git worktree list`
    The `--not --remotes` line is the one that shows unpushed branches without an upstream. Also check deploy and health state where relevant. Mark anything unchecked `UNVERIFIED`.
-4. **Write** `$d/CHECKPOINT.md`, overwriting it. Keep `## History` at the bottom, with one line per checkpoint: `- <YYYY-MM-DD HH:MM> — <one-line state>`.
+4. **Archive, then write.** Move the previous checkpoint aside, named by when it was written, so every earlier state stays on disk:
+   `[ -f "$d/CHECKPOINT.md" ] && mv "$d/CHECKPOINT.md" "$d/CHECKPOINT-$(date -r "$d/CHECKPOINT.md" +%F_%H%M%S).md"`
+   Then write a fresh `$d/CHECKPOINT.md`. Keep `## History` at the bottom, with one line per checkpoint: `- <YYYY-MM-DD HH:MM> — <one-line state>`.
 5. **Print** its path and a 5-line summary. Skip this when /summary called you, since it presents the result itself.
 
 Rules:
