@@ -22,7 +22,7 @@ Read every instruction file the table lists, in full: user and project `CLAUDE.m
 Find each of these. Cite every finding as `file:line` with a quote under 15 words.
 
 1. **Contradictions.** Two rules that can't both be obeyed, across all loaded sources, including hooks and the output style. Name both sides, and which one the model will probably follow (a later, more specific or louder rule usually wins). Ask the user which one they mean; never guess.
-2. **Duplicates.** The same rule in two or more places, or reworded. Propose one home and delete the others.
+2. **Duplicates.** The same rule in two or more places, or reworded. Propose one home and delete the others. **Similar names are not proof:** skills or files like `x-foo` and `x-bar` are often deliberate variants. Diff the contents and read both descriptions before calling anything a duplicate.
 3. **Misplaced rules.**
    - A project-only rule in the global file costs every other project.
    - A universal rule in a project file is missed elsewhere.
@@ -30,7 +30,7 @@ Find each of these. Cite every finding as `file:line` with a quote under 15 word
    - Long reference text belongs behind a pointer the model reads on demand.
 4. **Stale state.** Verify every dated claim and dead path the script flagged, plus any other "LIVE", version or "currently" claim, using the cheapest real check: `test -e`, `git log`, `gh`, `curl -sI`. Report it as stale only when the check fails. Otherwise say it is current, or say why you could not check.
 5. **Vague or unactionable rules.** "Be careful", "write good code", "always do your best" give the model nothing to act on. Rewrite each one as a concrete behaviour, or drop it.
-6. **Weight.** Use the table. The largest items that are *editable* (skill and plugin lists, MCP servers, memory index, CLAUDE.md sections) are the candidates for trimming. For each, estimate the tokens saved per session and what would be lost.
+6. **Weight.** Use the table. For skills, know what costs what. Every installed skill puts its name and description into the listing every session, even if it's never used. Its body loads only when it's invoked. So the cost sits in long descriptions, which the script ranks. The fix is a shorter description, not removing the skill. A skill marked `disable-model-invocation: true` leaves the listing entirely, but the model can then no longer pick it, so only you can run it as `/name`. Built-in skills can't be edited; a plugin's skills go only by disabling the plugin. The largest items that are *editable* (skill and plugin lists, MCP servers, memory index, CLAUDE.md sections) are the candidates for trimming. For each, estimate the tokens saved per session and what would be lost.
 7. **Noise.** Broken markup, leftover template text, unfinished sentences, raw HTML.
 
 Don't flag what is working: a long file that is all signal is fine.

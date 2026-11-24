@@ -65,6 +65,23 @@ done <<<"$(printf '%s\n' "$rows" | sort -t$'\t' -k1,1nr)"
 echo "| **$(tok $total)** | **$total** | | **total measured** (system prompt and tool schemas not included) |"
 echo
 
+# --- 1b. skill listing by entry --------------------------------------------------------
+# The listing carries every installed skill's description, used or not. The few long
+# descriptions are usually most of its weight, and those are what can be shortened.
+listing=$(first skill_listing | jq -r '.content // empty')
+if [ -n "$listing" ]; then
+  echo "## Skill listing — largest entries"
+  echo
+  ranked=$(printf '%s\n' "$listing" | awk '
+    /^- / { if (name != "") print len "\t" name; name = $2; sub(/:$/, "", name); len = length($0); next }
+    { len += length($0) + 1 }
+    END { if (name != "") print len "\t" name }' | sort -rn)
+  printf '%s\n' "$ranked" | awk -F'\t' '{t += $1} $1 > 300 {b += $1; c++} END {
+    printf "%d entries, %d chars; %d entries over 300 chars hold %d of them\n\n", NR, t, c, b }'
+  printf '%s\n' "$ranked" | head -10 | while IFS=$'\t' read -r n s; do echo "- $s — $n chars (≈$(tok "$n") tokens)"; done
+  echo
+fi
+
 # --- 2. loaded files vs disk ----------------------------------------------------------
 # A file loaded shorter than it is on disk was cut by a loader limit: the rest is invisible.
 echo "## Loaded files vs disk"
