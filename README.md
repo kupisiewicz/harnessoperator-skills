@@ -9,6 +9,7 @@ build their own. Part of the **Harness Operator** project. It targets
 
 - **Long sessions lose track of their work.** That's compact, `/checkpoint`, `/summary` and `/compact-check`.
 - **Staffing subagents takes a paragraph every time.** That's `/swarm`.
+- **"Tests pass" and "deployed" get said without being checked.** That's the evidence gate.
 
 | Skill | What it does | How it runs |
 |---|---|---|
@@ -18,6 +19,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
 | **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
 | **`/compact-check`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
+| **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
 
 ---
 
@@ -47,7 +49,7 @@ cd harnessoperator-skills
 Then **start a new Claude Code session**, since hooks load at session start.
 
 **Requirements:** `bash`, `jq` (`brew install jq` or `apt install jq`), and a Claude
-Code version with `PreCompact`, `PostCompact` and `SessionStart` hooks. `git` is
+Code version with `PreCompact`, `PostCompact`, `SessionStart` and `Stop` hooks. `git` is
 optional; it is used to find the repo root and to check branch state. macOS and Linux
 are supported, and CI runs the test suite on both.
 
@@ -60,9 +62,10 @@ own entries, and backs up every file it changes first
 |---|---|
 | `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
+| `hooks/evidence-gate.sh` | `~/.claude/hooks/harnessoperator/evidence-gate.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
 | `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/compact-check`, not a hook) |
-| Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`) | merged into `~/.claude/settings.json` |
+| Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
 If your `CLAUDE.md` already has a `## Compact instructions` section that you wrote
@@ -204,6 +207,39 @@ DO FIRST: wait for the agents, /checkpoint, then /compact.
   state lives only in the context, because that is the verified record.
 - **Read-only.** It never compacts, commits or edits anything.
 
+### The evidence gate: claims need a check from this turn
+
+A rule in `CLAUDE.md` that says "verify before you claim" is only a request. This
+`Stop` hook enforces it. When the model is about to end its turn, the hook reads the
+final reply and the turn's tool calls from the transcript:
+
+| The reply claims | It counts as evidence when this turn ran |
+|---|---|
+| tests pass, CI is green, `N passed` | a test command, `gh pr checks` or `gh run` |
+| deployed, is live, in production | `curl`/`wget`/`ssh`/a deploy or health check, or a browser look |
+| pushed, merged (next to a PR, branch or `#123`) | `git push`/`git log`/`git merge`, or `gh pr`/`gh api` |
+| fixed, works now, verified | any command or browser check |
+| builds, compiles | a build, compile or syntax-check command |
+
+- **After the last code edit.** A check that ran before the code changed proved the
+  old code. Writing notes, docs or memory (`*.md`, `*.txt`, `~/.claude/`) afterwards
+  doesn't count as a change.
+- **Claims, not mentions.** Code, quoted words, and sentences that negate or hedge
+  ("not deployed", "UNVERIFIED", "once CI is green", "Nothing is merged") claim
+  nothing.
+- **Relays are left alone.** A turn that delegated to subagents, or one opened by an
+  agent's report, passes on checks that ran in another transcript. Reviewing agents is
+  a separate step.
+- **One nudge, never a loop.** When a claim lacks evidence, the model is sent back once
+  with the claim and what would prove it. It can run the check, mark the claim
+  UNVERIFIED, or say which earlier turn proved it. The second stop always goes through
+  (`stop_hook_active`).
+- **Calibrated on real sessions.** Replayed over 406 real turns, it blocked 3. All
+  three were claims made from memory or from docs. Each false alarm found along the
+  way is now a regression test.
+
+Turn it off for one session with `HO_EVIDENCE_GATE=off`.
+
 ### What a checkpoint looks like
 
 ```markdown
@@ -284,6 +320,7 @@ Set these in the `env` block of `~/.claude/settings.json`:
 | `HO_CHECKPOINT_KEEP` | `10` | Dated compact summaries kept per project |
 | `HO_CHECKPOINT_DAYS` | `60` | Saved transcripts older than this many days are deleted |
 | `HO_CONTEXT_WINDOW` | detected, else `200000` | Context window in tokens that `/compact-check` measures against |
+| `HO_EVIDENCE_GATE` | `on` | `off` disables the evidence gate |
 
 ```json
 { "env": { "HO_CHECKPOINT_KEEP": "20", "HO_CHECKPOINT_DAYS": "30" } }
@@ -336,7 +373,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-119 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+141 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See

@@ -19,15 +19,15 @@ tmp=$(mktemp)
 
 if [ -f "$settings" ] && jq empty "$settings" 2>/dev/null; then
   cp -p "$settings" "$settings.bak-harnessoperator-$stamp"
-  jq --arg cmd "$hook" '
+  jq --arg cmd "$hook" --arg gate "$(dirname "$hook")/evidence-gate.sh" '
     if .hooks then .hooks |= with_entries(
-      .value |= (map(.hooks |= map(select(.command != $cmd))) | map(select((.hooks | length) > 0))))
+      .value |= (map(.hooks |= map(select(.command != $cmd and .command != $gate))) | map(select((.hooks | length) > 0))))
       | .hooks |= with_entries(select((.value | length) > 0))
     else . end' "$settings" > "$tmp" && mv "$tmp" "$settings"
   say "hooks removed from $settings"
 fi
 
-rm -f "$hook"
+rm -f "$hook" "$(dirname "$hook")/evidence-gate.sh"
 for f in "$repo"/scripts/*.sh; do rm -f "$(dirname "$hook")/$(basename "$f")"; done
 rmdir "$(dirname "$hook")" 2>/dev/null || true; say "hook and helpers removed"
 
