@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Evidence gate**: "live" for a local tool means installed. When the reply talks about installing, an install script or a `cmp`/`diff` against the installed copy now counts as evidence. A claim that a URL is live still needs a request. A turn that answers the gate's own feedback is never nudged again. Both came from the gate's first live false alarm, and both are regression tests.
+
 - **`/lesson`**: turns a correction into one rule with its why and how to apply it, in the user's own words and never strengthened, filed once in global `CLAUDE.md`, project `CLAUDE.md` or memory. `scripts/lesson-search.sh` lists the possible homes and every existing line on the topic (the global file and its `@imports`, `CLAUDE.md` files up the tree, rules folders, and the memory index, descriptions and feedback notes), so a duplicate is strengthened instead of added and a conflict goes to the user.
 
 - **Evidence gate** (`hooks/evidence-gate.sh`, a `Stop` hook): when the final reply claims tests pass, something is deployed or live, merged or pushed, fixed, or builds, it checks that the turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove the claim or mark it UNVERIFIED. It ignores code, quoted words, negated or hedged sentences, and turns that relayed subagents' work. Replayed over 406 real turns, it blocked 3, all of them claims made from memory. `HO_EVIDENCE_GATE=off` disables it.
