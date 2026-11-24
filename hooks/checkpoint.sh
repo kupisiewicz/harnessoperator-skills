@@ -28,22 +28,35 @@ base="$HOME/.claude/checkpoints"
 slugify() { printf '%s' "$1" | sed 's#[^A-Za-z0-9]#-#g'; }
 stamp=$(date +%Y-%m-%d_%H%M%S)
 
-# The folder of cwd's child directory this session touched most, judged from the last
-# 20 MB of its transcript (entry cwds + file paths of tool calls). Used when a session
-# runs from an umbrella folder that holds many projects, so each project still gets its
-# own checkpoints instead of all of them sharing the umbrella's.
-busiest_child() {
+# Used when a session runs from an umbrella folder that holds many projects, so each
+# project still gets its own checkpoints instead of all of them sharing the umbrella's.
+# pick_project <paths> <folder> <repos-only>: the most-touched child of <folder> among
+# the newline-separated <paths>, printed as its project root. A git repo (or worktree)
+# is keyed by its root. A plain folder counts too, unless it is hidden: .claude is config
+# and .wt-style folders are worktree containers, so inside those only a repo one level
+# down qualifies.
+pick_project() {
+  local name d r
+  printf '%s\n' "$1" | while IFS= read -r p; do
+      case "$p" in ("$2"/?*) p=${p#"$2"/}; echo "${p%%/*}" ;; esac
+    done | sort | uniq -c | sort -rn | while read -r _ name; do
+      d="$2/$name"; [ -d "$d" ] || continue   # skip files like notes.md
+      if r=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null); then echo "$r"; break; fi
+      case "$name" in
+        (.*) [ -z "$3" ] && r=$(pick_project "$1" "$d" 1) && [ -n "$r" ] && { echo "$r"; break; } ;;
+        (*)  [ -z "$3" ] && { (cd "$d" && pwd -P); break; } ;;
+      esac
+    done
+}
+# Judged from the last 20 MB of the transcript: entry cwds + file paths of tool calls.
+busiest_project() {
   [ -f "$1" ] || return 1
-  local child
-  child=$(tail -c 20000000 "$1" | jq -Rr 'fromjson? | (.cwd // empty),
+  local paths r
+  paths=$(tail -c 20000000 "$1" | jq -Rr 'fromjson? | (.cwd // empty),
       (.message.content[]? | select(.type? == "tool_use") | .input
-       | (.file_path // .path // .notebook_path // empty) | strings)' 2>/dev/null \
-    | while IFS= read -r p; do
-        case "$p" in ("$cwd"/?*) p=${p#"$cwd"/}; echo "${p%%/*}" ;; esac
-      done | sort | uniq -c | sort -rn | while read -r _ name; do
-        [ -d "$cwd/$name" ] && { echo "$cwd/$name"; break; }   # skip files like notes.md
-      done)
-  [ -n "$child" ] && echo "$child"
+       | (.file_path // .path // .notebook_path // empty) | strings)' 2>/dev/null)
+  r=$(pick_project "$paths" "$cwd" "")
+  [ -n "$r" ] && echo "$r"
 }
 
 # Inside a repo, key by its root so a session started in repo/sub shares repo's folder.
@@ -54,9 +67,7 @@ else
   root=$(cd "$cwd" 2>/dev/null && pwd -P) || root=$cwd; umbrella=1
   # Pre- and PostCompact read the same transcript, so both pick the same project.
   case "$event" in PreCompact|PostCompact)
-    if child=$(busiest_child "$(field .transcript_path)"); then
-      root=$(git -C "$child" rev-parse --show-toplevel 2>/dev/null) || root=$(cd "$child" && pwd -P)
-    fi ;;
+    project=$(busiest_project "$(field .transcript_path)") && root=$project ;;
   esac
 fi
 dir="$base/$(slugify "$root")"

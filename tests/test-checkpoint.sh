@@ -117,6 +117,15 @@ out=$(uev SessionStart u1 "$ut" | run)
 check "umbrella: compact SessionStart finds own checkpoint in project folder" 'ctx "$out" | grep -qF -- "$bslug/" && ctx "$out" | grep -qF "u1.transcript.jsonl"'
 out=$(uev SessionStart u2 "$ut" | jq -c '.source="startup"' | run)
 check "umbrella: startup lists project checkpoints inside it" 'ctx "$out" | grep -qF -- "$bslug/latest.md"'
+# Hidden folders: .claude (config, no repo) is touched most but must not win; .wt is a
+# worktree container, so the repo inside it wins over alpha.
+mkdir -p "$umb/.claude/memory" "$umb/.wt/feat"; git -C "$umb/.wt/feat" init -q
+froot=$(git -C "$umb/.wt/feat" rev-parse --show-toplevel); fslug=$(printf '%s' "$froot" | sed 's#[^A-Za-z0-9]#-#g')
+ht="$sandbox/hidden.jsonl"
+{ for f in .claude/memory/a.md .claude/memory/b.md .claude/x .claude/y .wt/feat/1 .wt/feat/2 alpha/1; do
+    jq -nc --arg p "$umb/$f" '{type:"assistant",message:{content:[{type:"tool_use",input:{file_path:$p}}]}}'; done; } > "$ht"
+uev PreCompact h1 "$ht" | run
+check "umbrella: hidden config folder skipped, repo inside worktree container wins" '[ -f "$sandbox/.claude/checkpoints/$fslug/h1.transcript.jsonl" ]'
 printf '{"type":"user","message":"x"}\n' > "$sandbox/empty.jsonl"
 uev PostCompact u3 "$sandbox/empty.jsonl" | run >/dev/null
 check "umbrella: no project in transcript -> falls back to umbrella folder" '[ -f "$sandbox/.claude/checkpoints/$uslug/latest.md" ]'
