@@ -7,8 +7,9 @@ Write a checkpoint of the work in this session so a fresh context can resume wit
 
 Steps:
 
-1. **Locate.** Run this from the session's working directory (not a repo you `cd`'d into). It gives the folder and the timestamp:
-   `d=~/.claude/checkpoints/$( (git rev-parse --show-toplevel 2>/dev/null || pwd) | sed 's#[^A-Za-z0-9]#-#g'); mkdir -p "$d"; echo "$d"; date '+%F %H:%M'`
+1. **Locate.** Run this from the session's working directory. It gives the folder and the timestamp:
+   `d=~/.claude/checkpoints/$( (git rev-parse --show-toplevel 2>/dev/null || pwd -P) | sed 's#[^A-Za-z0-9]#-#g'); mkdir -p "$d"; echo "$d"; date '+%F %H:%M'`
+   **Umbrella folder:** if the working directory is not a git repo but holds several projects, and this session's work was in one of them, run the line from inside that project instead (`cd <project> && …`). The compact hook files umbrella sessions the same way, under the project touched most, so both kinds of checkpoint land together.
 2. **Carry forward.** If `$d/CHECKPOINT.md` or `$d/latest.md` exist, read them first. Keep every item that is still true, so older Done items don't vanish after a compact.
 3. **Verify** every repo touched. Report what IS, not what was planned:
    `git status -sb; git branch -vv; git log --oneline -15 --all --decorate; git log --branches --not --remotes --oneline; git worktree list`

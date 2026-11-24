@@ -84,7 +84,7 @@ check "SessionStart: only CHECKPOINT.md -> still not silent" 'ctx "$out" | grep 
 
 # --- cwd fallback -------------------------------------------------------------
 ( cd "$sandbox" && jq -nc '{hook_event_name:"PostCompact",session_id:"s4",compact_summary:"x"}' | HOME="$sandbox" "$SH" "$HOOK" >/dev/null )
-pslug=$(printf '%s' "$(cd "$sandbox" && pwd)" | sed 's#[^A-Za-z0-9]#-#g')
+pslug=$(printf '%s' "$(cd "$sandbox" && pwd -P)" | sed 's#[^A-Za-z0-9]#-#g')
 check "missing cwd in payload: falls back to PWD" '[ -f "$sandbox/.claude/checkpoints/$pslug/latest.md" ]'
 
 # --- repo subfolder keys by repo root -----------------------------------------
@@ -94,6 +94,32 @@ rslug=$(printf '%s' "$rroot" | sed 's#[^A-Za-z0-9]#-#g')
 jq -nc --arg c "$repo/sub/deep" '{hook_event_name:"PostCompact",session_id:"s5",cwd:$c,compact_summary:"x"}' | run >/dev/null
 check "cwd in repo subfolder: checkpoint lands in repo-root folder" '[ -f "$sandbox/.claude/checkpoints/$rslug/latest.md" ]'
 check "cwd in repo subfolder: no subfolder-slug folder" '! find "$sandbox/.claude/checkpoints" -maxdepth 1 -name "*-sub-deep" | grep -q .'
+
+# --- umbrella folder: checkpoints go to the project the session worked on ---------
+# A non-repo folder holding several projects. The transcript touches beta most (one of
+# them a repo), alpha once, and a loose file at the top that must never win.
+umb=$(cd "$sandbox" && pwd)/umbrella; mkdir -p "$umb/alpha" "$umb/beta/src"; git -C "$umb/beta" init -q
+: > "$umb/notes.md"
+broot=$(git -C "$umb/beta" rev-parse --show-toplevel); bslug=$(printf '%s' "$broot" | sed 's#[^A-Za-z0-9]#-#g')
+uslug=$(printf '%s' "$(cd "$umb" && pwd -P)" | sed 's#[^A-Za-z0-9]#-#g')
+ut="$sandbox/umbrella.jsonl"
+{ for f in notes.md notes.md notes.md notes.md; do jq -nc --arg p "$umb/$f" '{type:"assistant",cwd:"/elsewhere",message:{content:[{type:"tool_use",input:{file_path:$p}}]}}'; done
+  jq -nc --arg p "$umb/alpha/a.js" '{type:"assistant",message:{content:[{type:"tool_use",input:{file_path:$p}}]}}'
+  jq -nc --arg c "$umb/beta/src" '{type:"user",cwd:$c,message:{content:"hi"}}'
+  jq -nc --arg p "$umb/beta/src/b.js" '{type:"assistant",message:{content:[{type:"tool_use",input:{file_path:$p}}]}}'
+  echo 'not json'; } > "$ut"
+uev() { jq -nc --arg e "$1" --arg s "$2" --arg c "$umb" --arg t "$3" --arg m "$full_u" '{hook_event_name:$e,source:"compact",session_id:$s,cwd:$c,transcript_path:$t,compact_summary:$m}'; }
+full_u=$'In progress\nNot started\nState of the world\nResume here'
+uev PreCompact u1 "$ut" | run; uev PostCompact u1 "$ut" | run >/dev/null
+check "umbrella: transcript saved under busiest project (repo root)" '[ -f "$sandbox/.claude/checkpoints/$bslug/u1.transcript.jsonl" ]'
+check "umbrella: summary saved beside it, not in umbrella folder" '[ -f "$sandbox/.claude/checkpoints/$bslug/latest.md" ] && [ ! -d "$sandbox/.claude/checkpoints/$uslug" ]'
+out=$(uev SessionStart u1 "$ut" | run)
+check "umbrella: compact SessionStart finds own checkpoint in project folder" 'ctx "$out" | grep -qF -- "$bslug/" && ctx "$out" | grep -qF "u1.transcript.jsonl"'
+out=$(uev SessionStart u2 "$ut" | jq -c '.source="startup"' | run)
+check "umbrella: startup lists project checkpoints inside it" 'ctx "$out" | grep -qF -- "$bslug/latest.md"'
+printf '{"type":"user","message":"x"}\n' > "$sandbox/empty.jsonl"
+uev PostCompact u3 "$sandbox/empty.jsonl" | run >/dev/null
+check "umbrella: no project in transcript -> falls back to umbrella folder" '[ -f "$sandbox/.claude/checkpoints/$uslug/latest.md" ]'
 
 # --- compliance check ---------------------------------------------------------
 cwd="/Volumes/Test Dir/compliance"; dir="$sandbox/.claude/checkpoints/$(printf '%s' "$cwd" | sed 's#[^A-Za-z0-9]#-#g')"

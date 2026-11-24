@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Umbrella folders**: a session started outside any repo, in a folder holding several projects, no longer shares one checkpoint folder with every other such session. The compact hook files it under the sub-project its transcript touched most. `/checkpoint` and `/summary` use the same rule, and a new session there lists the newest project checkpoints. Non-repo folders are now keyed by their symlink-free path.
 - **`/checkpoint`** no longer overwrites history: the previous `CHECKPOINT.md` is moved to `CHECKPOINT-<YYYY-MM-DD_HHMMSS>.md` (its write time) before the new one is written.
 - **`/swarm N [task]`**: splits a task across N subagents. The mix is ⅔ Sonnet and ⅓ Opus, plus from N = 7 one Fable reviewer per 10 agents, which checks the workers' output after all of them report. A test keeps its mix table in step with the formula.
 
