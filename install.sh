@@ -2,6 +2,7 @@
 # Installs harnessoperator-skills into ~/.claude (user scope, all projects):
 #   commands/*.md                   -> ~/.claude/commands/
 #   hooks/checkpoint.sh             -> ~/.claude/hooks/harnessoperator/checkpoint.sh
+#   scripts/*.sh                    -> ~/.claude/hooks/harnessoperator/ (helpers the commands run)
 #   hook wiring                     -> ~/.claude/settings.json (merged, never replaced)
 #   compact/compact-instructions.md -> ~/.claude/CLAUDE.md (between marker comments)
 # Safe to run again: it updates in place and never duplicates anything. Every file it
@@ -36,8 +37,11 @@ for f in "$repo"/commands/*.md; do
   cp "$f" "$dest"; say "command: /$(basename "$f" .md)"
 done
 
-# 2. Hook script.
+# 2. Hook script, plus the helper scripts commands call (they live beside the hook).
 cp "$repo/hooks/checkpoint.sh" "$hook"; chmod +x "$hook"; say "hook: $hook"
+for f in "$repo"/scripts/*.sh; do
+  cp "$f" "$(dirname "$hook")/"; chmod +x "$(dirname "$hook")/$(basename "$f")"; say "helper: $(basename "$f")"
+done
 
 # 3. Wiring. Drop any earlier entry that runs our hook, then add one per event, so
 #    re-running never duplicates. Other hooks in the file are left untouched.

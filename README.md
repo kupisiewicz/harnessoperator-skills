@@ -16,6 +16,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/checkpoint`** | Writes a verified, structured `CHECKPOINT.md`: done, in progress, not started, decisions, gotchas, and where to resume. | You type it |
 | **`/summary`** | Shows what's done, in progress and not started, from the latest checkpoint, checked against live git state. `/summary all` covers every project. | You type it |
 | **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
+| **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
 
 ---
 
@@ -56,8 +57,9 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
+| `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
@@ -150,6 +152,29 @@ and a test keeps it in step with the formula.
   reports and changed paths, never the orchestrator's conclusions.
 - If the task has fewer real pieces than N, it uses fewer agents and says why. It
   never invents busywork.
+
+### `/context-audit`: what every session reads before you type
+
+Everything that loads at session start costs tokens every time. That covers `CLAUDE.md`
+files, the memory index, hook output, the skill list, MCP instructions and the output
+style. A contradiction in any of them leaves the model guessing which rule you meant.
+
+- **Measured, not guessed.** `context-inventory.sh` reads the newest session
+  transcript, which records exactly what Claude Code loaded and how big each part was.
+  It prints a table, largest first, plus the faults a script can prove:
+  - a file that was cut off when it loaded
+  - memory index links to missing files, and memory files nothing links to
+  - paths that no longer exist
+  - leftover HTML
+  - "LIVE" or "deployed" claims with an old date
+- **Judged by the model.** It looks for contradictions (both sides quoted, with
+  `file:line`), duplicates, rules in the wrong file, vague rules, and state that belongs
+  in memory rather than in an index line. It verifies every stale-looking claim with a
+  real check before calling it stale.
+- **Tracked.** Each report is saved to `~/.claude/context-audits/<project>/` and
+  compared with the previous one.
+- **Changes nothing on its own.** Fixes are applied only after you approve them, with a
+  backup, and never to installer-managed blocks or generated files.
 
 ### What a checkpoint looks like
 

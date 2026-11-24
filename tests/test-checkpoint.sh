@@ -173,7 +173,8 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ]'
+check "install: helper script beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
 done
@@ -199,9 +200,43 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)" = 000 ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook and commands removed" '[ ! -e "$IH" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ]'
+check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
+
+# --- context inventory (/context-audit's script) ------------------------------------
+INV="$REPO/scripts/context-inventory.sh"
+check "context-inventory.sh: executable, bash -n" '[ -x "$INV" ] && bash -n "$INV"'
+ca="$sandbox/ctx"; mkdir -p "$ca/mem"
+printf 'Rules\nKeep `<br>` as an example.\nOops </strong></p> left over.\nKey file: /Users/nobody-ho-test/gone.env\n```\n/Users/nobody/in-a-fence\n```\nAPI LIVE 2020-01-02 on the box.\n' "$ca" > "$ca/CLAUDE.md"
+printf 'short file, loaded in full\n' > "$ca/RULES.md"
+printf -- '- [A](a.md) — ok\n- [B](b.md) — missing\n' > "$ca/mem/MEMORY.md"
+: > "$ca/mem/a.md"; : > "$ca/mem/orphan.md"
+cut=$(head -c 20 "$ca/CLAUDE.md")
+jq -nc --arg p1 "$ca/CLAUDE.md" --arg c1 "$cut" --arg p2 "$ca/RULES.md" --rawfile c2 "$ca/RULES.md" --arg p3 "$ca/mem/MEMORY.md" --rawfile c3 "$ca/mem/MEMORY.md" '
+  {timestamp:"2026-01-01T00:00:00Z", attachment:{type:"instructions", files:[
+    {path:$p1, type:"User", content:$c1}, {path:$p2, type:"Project", content:$c2}, {path:$p3, type:"AutoMem", content:$c3}]}},
+  {attachment:{type:"hook_additional_context", hookName:"SessionStart", content:["0123456789"]}},
+  {attachment:{type:"skill_listing", skillCount:3, content:("x" * 400)}},
+  {attachment:{type:"mcp_instructions_delta", addedBlocks:["## srv-one\nbe nice"]}},
+  {attachment:{type:"output_style_instructions", style:{name:"Terse", prompt:"short"}}}' > "$ca/t.jsonl"
+echo 'not json' >> "$ca/t.jsonl"
+inv=$(HOME="$sandbox" "$SH" "$INV" "$ca/t.jsonl" 2>&1); rc=$?
+check "inventory: rc=0 on a transcript with junk lines" '[ $rc -eq 0 ]'
+check "inventory: every source in the table" 'for s in "$ca/CLAUDE.md" "$ca/RULES.md" "skill listing (3 skills)" "MCP instructions: srv-one" "output style: Terse" "| hook | SessionStart"; do grep -qF -- "$s" <<<"$inv" || exit 1; done'
+check "inventory: biggest item first" '[ "$(grep -m1 -E "^\| [0-9]+ \|" <<<"$inv" | cut -d"|" -f4 | tr -d " ")" = skills ]'
+check "inventory: 7 rows, total is their sum" '[ "$(grep -cE "^\| [0-9]+ \|" <<<"$inv")" = 7 ] && [ "$(grep -F "total measured" <<<"$inv" | cut -d"|" -f3 | tr -d " *")" = "$(grep -E "^\| [0-9]+ \|" <<<"$inv" | cut -d"|" -f3 | awk "{s+=\$1} END{print s}")" ]'
+check "inventory: prefix-only copy reported TRUNCATED" 'grep -qF "TRUNCATED: $ca/CLAUDE.md" <<<"$inv"'
+check "inventory: full copy (minus final newline) is ok" 'grep -qF "ok: $ca/RULES.md" <<<"$inv"'
+check "inventory: memory link to missing file found" 'grep -A1 "links to missing files: 1" <<<"$inv" | grep -qF b.md'
+check "inventory: unlinked memory file found" 'grep -qF "orphan.md" <<<"$inv"'
+check "inventory: dead path in prose found" 'grep -qF "/Users/nobody-ho-test/gone.env" <<<"$inv"'
+check "inventory: path inside a code fence ignored" '! grep -qF "in-a-fence" <<<"$inv"'
+check "inventory: stray HTML found, <br> in backticks ignored" 'grep -qF "</strong></p>" <<<"$inv" && ! grep -F "CLAUDE.md:" <<<"$inv" | grep -qF "<br>"'
+check "inventory: old dated LIVE claim found" 'grep -qF "LIVE 2020-01-02" <<<"$inv"'
+( cd "$sandbox" && HOME="$sandbox/nohome" "$SH" "$INV" >/dev/null 2>&1 ); rc=$?
+check "inventory: no transcript -> clear error, rc!=0" '[ $rc -ne 0 ]'
+check "/context-audit runs the installed script and gates edits on approval" "grep -qF 'hooks/harnessoperator/context-inventory.sh' \"$CMDS/context-audit.md\" && grep -qi 'only after the user' \"$CMDS/context-audit.md\""
 
 # --- prompts agree with the hook ----------------------------------------------
 check "/summary has an 'all' overview mode" "grep -q 'argument is exactly \`all\`' \"$CMDS/summary.md\""
