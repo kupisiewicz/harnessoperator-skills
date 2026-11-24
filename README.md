@@ -203,6 +203,10 @@ and a test keeps it in step with the formula.
   `git rev-parse --show-toplevel`, or the working directory outside a repo, with every
   non-alphanumeric character replaced by `-`. Sessions started in `repo/` and in
   `repo/src/` share a folder.
+- **Umbrella folders split by project.** A session started in a non-repo folder that
+  holds many projects (`~/code` with `api/`, `web/`, …) is filed under the project it
+  touched most, judged from the transcript's file paths and working directories. A new
+  session there is pointed at the three newest project checkpoints below it.
 - **Never inside your repo,** so checkpoints never dirty a working tree or get
   committed by accident.
 - **PreCompact** hardlinks the live transcript: it uses no extra disk while the

@@ -17,7 +17,8 @@ Otherwise:
 Steps:
 
 1. **Locate.** From the session's working directory:
-   `d=~/.claude/checkpoints/$( (git rev-parse --show-toplevel 2>/dev/null || pwd) | sed 's#[^A-Za-z0-9]#-#g'); ls -lt "$d"/CHECKPOINT.md "$d"/latest.md 2>/dev/null`
+   `d=~/.claude/checkpoints/$( (git rev-parse --show-toplevel 2>/dev/null || pwd -P) | sed 's#[^A-Za-z0-9]#-#g'); ls -lt "$d"/CHECKPOINT.md "$d"/latest.md 2>/dev/null`
+   **Umbrella folder:** if the working directory is not a git repo, its projects' checkpoints live in folders named `$d-<project>`. If this session worked in one project, use that folder as `$d`. If the user named a project, use its folder. Otherwise list `ls -dt "$d"-*/` and do the `all` overview restricted to those folders, then stop.
 
 2. **No checkpoint (neither file exists):** read `~/.claude/commands/checkpoint.md` and follow it exactly, but skip its step 5 (the print). Then go to step 4 using the file it wrote.
 
