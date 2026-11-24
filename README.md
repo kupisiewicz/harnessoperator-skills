@@ -7,7 +7,7 @@ Skills, hooks and instructions for people who run AI coding harnesses all day, o
 build their own. Part of the **Harness Operator** project. It targets
 [Claude Code](https://docs.claude.com/en/docs/claude-code) and solves two problems:
 
-- **Long sessions lose track of their work.** That's compact, `/checkpoint` and `/summary`.
+- **Long sessions lose track of their work.** That's compact, `/checkpoint`, `/summary` and `/docompact`.
 - **Staffing subagents takes a paragraph every time.** That's `/swarm`.
 
 | Skill | What it does | How it runs |
@@ -17,6 +17,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/summary`** | Shows what's done, in progress and not started, from the latest checkpoint, checked against live git state. `/summary all` covers every project. | You type it |
 | **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
 | **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
+| **`/docompact`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
 
 ---
 
@@ -57,9 +58,10 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/docompact.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
+| `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/docompact`, not a hook) |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
@@ -176,6 +178,32 @@ style. A contradiction in any of them leaves the model guessing which rule you m
 - **Changes nothing on its own.** Fixes are applied only after you approve them, with a
   backup, and never to installer-managed blocks or generated files.
 
+### `/docompact`: compact now, or not yet?
+
+Two questions, one short answer: is the context big enough that compacting helps, and
+would compacting right now lose anything?
+
+```
+COMPACT: soon — context ≈142k of 200k (71%), window assumed.
+SAFE NOW: no — 2 background agents still running; api has 3 uncommitted files and no checkpoint.
+DO FIRST: wait for the agents, /checkpoint, then /compact.
+```
+
+- **Measured, not guessed.** `compact-check.sh` reads the token usage the API reported
+  for the last model turn (input + cache read + cache creation). Under 50% of the window
+  is `no`, 50–74% is `soon`, 75% or more is `yes`.
+- **The window is detected where it can be.** `HO_CONTEXT_WINDOW` wins, then a `[1m]`
+  model id, then a context already past 200k (which proves a larger window). Otherwise it
+  assumes 200k and the answer says `window assumed`.
+- **Safety has two halves.** The script lists every repo the session touched with its
+  uncommitted and unpushed counts, and the age of the project's checkpoints. The model
+  adds what no file records: agents or shells still running, a half-done edit, a question
+  you haven't answered.
+- **What a compact already saves.** The hook keeps the raw transcript and the summary, so
+  nothing is unrecoverable. `/docompact` still sends you to `/checkpoint` first when
+  state lives only in the context, because that is the verified record.
+- **Read-only.** It never compacts, commits or edits anything.
+
 ### What a checkpoint looks like
 
 ```markdown
@@ -255,6 +283,7 @@ Set these in the `env` block of `~/.claude/settings.json`:
 |---|---|---|
 | `HO_CHECKPOINT_KEEP` | `10` | Dated compact summaries kept per project |
 | `HO_CHECKPOINT_DAYS` | `60` | Saved transcripts older than this many days are deleted |
+| `HO_CONTEXT_WINDOW` | detected, else `200000` | Context window in tokens that `/docompact` measures against |
 
 ```json
 { "env": { "HO_CHECKPOINT_KEEP": "20", "HO_CHECKPOINT_DAYS": "30" } }
@@ -307,7 +336,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-80 black-box tests run the real hook, installer and uninstaller against a temporary
+118 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See
