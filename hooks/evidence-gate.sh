@@ -22,13 +22,15 @@ transcript=$(field .transcript_path)
 
 # The turn = everything after the user's last typed message (a string, or text without
 # tool results). Final reply = assistant text after the turn's last tool call. Evidence =
-# the turn's tool calls, in order, with any shell command spelled out.
+# the turn's tool calls, in order, with any shell command spelled out. A turn opened by
+# an agent's report, or by this gate's own feedback (the answer to its one nudge), is a
+# relay. Comments stay out of the jq program: older jq rejects them.
 turn=$(tail -c 5000000 "$transcript" | jq -Rc 'fromjson? | objects | select(.isSidechain != true)' 2>/dev/null | jq -sc '
   def typed_user: .type == "user" and (.message.content | (type == "string")
       or (type == "array" and any(.[]; .type? == "text") and all(.[]; .type? != "tool_result")));
   (map(typed_user) | rindex(true)) as $u
   | if $u == null then empty else . end
-  | (.[$u].message.content | tostring | test("<task-notification>|Subagent hand-back")) as $relay
+  | (.[$u].message.content | tostring | test("<task-notification>|Subagent hand-back|^Stop hook feedback:|Evidence gate: your final reply")) as $relay
   | .[$u + 1:]
   | [.[] | select(.type == "assistant") | .message.content[]? | objects] as $blocks
   | ($blocks | map(.type == "tool_use") | rindex(true)) as $t
@@ -69,9 +71,14 @@ need() {   # kind, claim regex, evidence regex, what would prove it, [sentence m
 test_cmd='\b(test|tests|pytest|jest|vitest|mocha|rspec|phpunit|go test|cargo test|bun test|npm (run )?test|make check|ctest|tox)\b|gh (pr checks|run (view|watch))'
 need "a test result" '\b(all )?tests? (now )?(pass(es|ed)?|green|succeed(ed)?)\b|\bpassed [0-9]+\b|[0-9]+ (tests )?pass(ed)?\b|\bci (is )?(green|pass(es|ed)?)\b' \
   "$test_cmd" "Run the tests and quote the result line."
-need "a deploy or live state" '\b(deployed|is live|now live|went live|in production|shipped to prod(uction)?|rolled out)\b' \
-  '\b(curl|wget|http|ssh|deploy|kubectl|docker|gh run|health)\b|navigate|screenshot|browser|get_page_text|read_page' \
-  "Check the live URL or health endpoint, or the deploy run, and quote it."
+# Tools, hooks and commands have no server: "live" for them means installed on this
+# machine. When the reply talks about installing, checking the installed copy (an install
+# script, cmp or diff against it) is the evidence. A URL claim still needs a request.
+live_evidence='\b(curl|wget|http|ssh|deploy|kubectl|docker|gh run|health)\b|navigate|screenshot|browser|get_page_text|read_page'
+printf '%s\n' "$prose" | grep -qiE '\binstall(ed|s)?\b' &&
+  live_evidence="$live_evidence"'|\b(install(\.sh)?|cmp|diff)\b'
+need "a deploy or live state" '\b(deployed|is live|are live|now live|went live|in production|shipped to prod(uction)?|rolled out)\b' \
+  "$live_evidence" "Check the live URL or health endpoint, or the deploy run, and quote it."
 # "Merged" and "pushed" are git claims only next to a git word: data gets merged too.
 need "a push or merge" '\b(pushed|merged|pr (is )?(opened|created|merged))\b' \
   '\bgit (push|log|merge)\b|\bgh (pr|api)\b' "Show it with git log, gh pr view, or the push output." \

@@ -243,7 +243,7 @@ final reply and the turn's tool calls from the transcript:
 | The reply claims | It counts as evidence when this turn ran |
 |---|---|
 | tests pass, CI is green, `N passed` | a test command, `gh pr checks` or `gh run` |
-| deployed, is live, in production | `curl`/`wget`/`ssh`/a deploy or health check, or a browser look |
+| deployed, is live, in production | `curl`/`wget`/`ssh`/a deploy or health check, or a browser look. When the reply is about installing a local tool, an install script or a `cmp`/`diff` against the installed copy also counts |
 | pushed, merged (next to a PR, branch or `#123`) | `git push`/`git log`/`git merge`, or `gh pr`/`gh api` |
 | fixed, works now, verified | any command or browser check |
 | builds, compiles | a build, compile or syntax-check command |
@@ -260,10 +260,12 @@ final reply and the turn's tool calls from the transcript:
 - **One nudge, never a loop.** When a claim lacks evidence, the model is sent back once
   with the claim and what would prove it. It can run the check, mark the claim
   UNVERIFIED, or say which earlier turn proved it. The second stop always goes through
-  (`stop_hook_active`).
-- **Calibrated on real sessions.** Replayed over 406 real turns, it blocked 3. All
-  three were claims made from memory or from docs. Each false alarm found along the
-  way is now a regression test.
+  (`stop_hook_active`). A turn that answers the gate's own feedback is never nudged
+  again.
+- **Calibrated on real sessions.** Replayed over 408 real turns, it blocks 4. All four
+  are claims made from memory or from docs. Each false alarm found along the way,
+  including the first one it raised in a live session ("now live" for skills that had
+  just been installed), is now a regression test.
 
 Turn it off for one session with `HO_EVIDENCE_GATE=off`.
 
@@ -400,7 +402,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-150 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+154 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See

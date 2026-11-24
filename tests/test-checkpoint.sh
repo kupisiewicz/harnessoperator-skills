@@ -362,6 +362,16 @@ check "gate: a turn that delegated to agents relays their checks" '[ -z "$(gate 
 check "gate: a turn opened by an agent report is a relay" '[ -z "$(gate "$eg/r6.jsonl")" ]'
 { u "x"; say "Nothing is merged or deployed."; } > "$eg/r7.jsonl"
 check "gate: 'Nothing is merged or deployed' claims nothing" '[ -z "$(gate "$eg/r7.jsonl")" ]'
+# The first live false alarm (2026-11-24): skills merged and installed, then called "live".
+{ u "merge"; tc Bash "gh pr merge 11 --squash"; tc Bash "cmp scripts/x.sh ~/.claude/hooks/x.sh && echo INSTALLED-MATCHES";
+  say "The /lesson installed on this Mac is the same as main. All three skills are now live."; } > "$eg/r8.jsonl"
+check "gate: 'live' for a local install, with the installed copy checked -> allowed" '[ -z "$(gate "$eg/r8.jsonl")" ]'
+{ u "x"; tc Bash "cmp a b"; say "The site is now live."; } > "$eg/r9.jsonl"
+check "gate: a site called live with only a file compare -> still blocks" 'blocks "$(gate "$eg/r9.jsonl")"'
+{ u "x"; tc Bash "ls"; say "It is installed and now live."; } > "$eg/r10.jsonl"
+check "gate: 'installed and live' with no install or compare run -> still blocks" 'blocks "$(gate "$eg/r10.jsonl")"'
+{ u "Stop hook feedback: Evidence gate: your final reply makes claims"; say "PR #11 is merged; proof was in the previous turn."; } > "$eg/r11.jsonl"
+check "gate: the turn answering its own nudge is never nudged again" '[ -z "$(gate "$eg/r11.jsonl")" ]'
 echo 'not json' | HOME="$sandbox" "$SH" "$GATE" >/dev/null 2>&1; rc=$?
 check "gate: garbage stdin / missing transcript -> rc=0, silent" '[ $rc -eq 0 ] && [ -z "$(gate /nonexistent.jsonl)" ]'
 
