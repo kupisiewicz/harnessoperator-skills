@@ -217,7 +217,7 @@ jq -nc --arg p1 "$ca/CLAUDE.md" --arg c1 "$cut" --arg p2 "$ca/RULES.md" --rawfil
   {timestamp:"2026-01-01T00:00:00Z", attachment:{type:"instructions", files:[
     {path:$p1, type:"User", content:$c1}, {path:$p2, type:"Project", content:$c2}, {path:$p3, type:"AutoMem", content:$c3}]}},
   {attachment:{type:"hook_additional_context", hookName:"SessionStart", content:["0123456789"]}},
-  {attachment:{type:"skill_listing", skillCount:3, content:("x" * 400)}},
+  {attachment:{type:"skill_listing", skillCount:3, content:("- tiny\n- big: " + ("y" * 390) + "\n  second line of big\n- mid: abc")}},
   {attachment:{type:"mcp_instructions_delta", addedBlocks:["## srv-one\nbe nice"]}},
   {attachment:{type:"output_style_instructions", style:{name:"Terse", prompt:"short"}}}' > "$ca/t.jsonl"
 echo 'not json' >> "$ca/t.jsonl"
@@ -234,6 +234,7 @@ check "inventory: dead path in prose found" 'grep -qF "/Users/nobody-ho-test/gon
 check "inventory: path inside a code fence ignored" '! grep -qF "in-a-fence" <<<"$inv"'
 check "inventory: stray HTML found, <br> in backticks ignored" 'grep -qF "</strong></p>" <<<"$inv" && ! grep -F "CLAUDE.md:" <<<"$inv" | grep -qF "<br>"'
 check "inventory: old dated LIVE claim found" 'grep -qF "LIVE 2020-01-02" <<<"$inv"'
+check "inventory: skill entries ranked, multi-line entry counted whole" 'grep -A4 "Skill listing — largest" <<<"$inv" | grep -qF "3 entries" && [ "$(grep -m1 -E "^- (big|mid|tiny) —" <<<"$inv")" = "- big — 418 chars (≈105 tokens)" ]'
 ( cd "$sandbox" && HOME="$sandbox/nohome" "$SH" "$INV" >/dev/null 2>&1 ); rc=$?
 check "inventory: no transcript -> clear error, rc!=0" '[ $rc -ne 0 ]'
 check "/context-audit runs the installed script and gates edits on approval" "grep -qF 'hooks/harnessoperator/context-inventory.sh' \"$CMDS/context-audit.md\" && grep -qi 'only after the user' \"$CMDS/context-audit.md\""
