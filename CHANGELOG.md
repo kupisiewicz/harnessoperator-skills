@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **`/context-audit` inventory**: a memory note that is not in the index but is linked from a topic file the index links now counts as reachable and isn't flagged. Only notes that are neither get reported as unreachable. This lets a large memory keep its always-loaded index small.
+
 - **`/context-audit`**: audits everything loaded before the first message. `scripts/context-inventory.sh` measures it from the session transcript: sizes, files cut off on load, memory index faults, dead paths, stray HTML and stale dated claims. The model then judges contradictions, duplicates, misplaced and vague rules. Reports go to `~/.claude/context-audits/<project>/`, and fixes are applied only on approval.
 - **Umbrella folders**: a session started outside any repo, in a folder holding several projects, no longer shares one checkpoint folder with every other such session. The compact hook files it under the sub-project its transcript touched most. `/checkpoint` and `/summary` use the same rule, and a new session there lists the newest project checkpoints. Non-repo folders are now keyed by their symlink-free path. Hidden folders are skipped as projects (`.claude` is config), but a repo one level inside one (a `.wt/<branch>` worktree container) still counts.
 - **`/checkpoint`** no longer overwrites history: the previous `CHECKPOINT.md` is moved to `CHECKPOINT-<YYYY-MM-DD_HHMMSS>.md` (its write time) before the new one is written.

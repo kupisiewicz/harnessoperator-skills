@@ -163,7 +163,7 @@ style. A contradiction in any of them leaves the model guessing which rule you m
   transcript, which records exactly what Claude Code loaded and how big each part was.
   It prints a table, largest first, plus the faults a script can prove:
   - a file that was cut off when it loaded
-  - memory index links to missing files, and memory files nothing links to
+  - memory index links to missing files, and memory files that are not in the index or one link away from it
   - paths that no longer exist
   - leftover HTML
   - "LIVE" or "deployed" claims with an old date

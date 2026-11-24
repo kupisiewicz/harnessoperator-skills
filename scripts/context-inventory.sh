@@ -120,11 +120,21 @@ if [ -n "$mem" ] && [ -f "$mem" ]; then
   mdir=$(dirname "$mem")
   linked=$(grep -oE '\]\([^)#]+\.md\)' "$mem" | sed -E 's/^\]\(//; s/\)$//' | sort -u)
   missing=$(printf '%s\n' "$linked" | while IFS= read -r l; do [ -n "$l" ] && [ ! -f "$mdir/$l" ] && echo "$l"; done)
-  orphans=$(ls "$mdir" | grep '\.md$' | grep -vx MEMORY.md | while IFS= read -r f; do printf '%s\n' "$linked" | grep -qxF "$f" || echo "$f"; done)
+  # A note listed in a topic file the index links (by [[name]] or (file.md)) is one read
+  # away, which is how a big memory keeps its always-loaded index small. Only a note
+  # that neither reaches is truly lost.
+  hop=$(printf '%s\n' "$linked" | while IFS= read -r l; do
+      [ -n "$l" ] && [ -f "$mdir/$l" ] || continue
+      grep -oE '\[\[[^]]+\]\]' "$mdir/$l" | sed -E 's/^\[\[//; s/\]\]$//; s/$/.md/'
+      grep -oE '\]\([^)#]+\.md\)' "$mdir/$l" | sed -E 's/^\]\(//; s/\)$//'
+    done | sort -u)
+  notindex=$(ls "$mdir" | grep '\.md$' | grep -vx MEMORY.md | while IFS= read -r f; do printf '%s\n' "$linked" | grep -qxF "$f" || echo "$f"; done)
+  orphans=$(printf '%s\n' "$notindex" | while IFS= read -r f; do [ -n "$f" ] && ! printf '%s\n' "$hop" | grep -qxF "$f" && echo "$f"; done)
   echo "- index: $mem — $(wc -l < "$mem" | tr -d ' ') lines, $(printf '%s\n' "$linked" | grep -c .) linked files, $(ls "$mdir" | grep -c '\.md$') files in folder"
   echo "- links to missing files: $(printf '%s\n' "$missing" | grep -c .)"
   printf '%s\n' "$missing" | grep . | sed 's/^/  - /'
-  echo "- files not linked from the index (never recalled by the index): $(printf '%s\n' "$orphans" | grep -c .)"
+  echo "- not in the index but linked from a topic file it links (fine): $(( $(printf '%s\n' "$notindex" | grep -c .) - $(printf '%s\n' "$orphans" | grep -c .) ))"
+  echo "- unreachable (not in the index, not one link away): $(printf '%s\n' "$orphans" | grep -c .)"
   printf '%s\n' "$orphans" | grep . | head -40 | sed 's/^/  - /'
 else
   echo "- no auto-memory index was loaded"
