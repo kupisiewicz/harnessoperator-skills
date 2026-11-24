@@ -37,7 +37,7 @@ Don't flag what is working: a long file that is all signal is fine.
 
 ## 4. Report
 
-Write the report to `~/.claude/context-audits/<slug>/<YYYY-MM-DD_HHMM>.md`. `<slug>` is the project path with every non-alphanumeric character replaced by `-`, the same rule as checkpoints. If an earlier audit exists in that folder, compare totals and say what improved and what regressed.
+Write the report to `~/.claude/context-audits/<slug>/<YYYY-MM-DD_HHMM>.md`. It quotes your instruction files, so keep it owner-only: `(umask 077; mkdir -p <folder>)`, then `chmod 600` the report. `<slug>` is the project path with every non-alphanumeric character replaced by `-`, the same rule as checkpoints. If an earlier audit exists in that folder, compare totals and say what improved and what regressed.
 
 ```
 # Context audit — <project> — <YYYY-MM-DD HH:MM>
