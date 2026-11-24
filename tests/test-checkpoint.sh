@@ -173,8 +173,8 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ]'
-check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ] && [ -f "$C/commands/decision.md" ]'
+check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ] && [ -x "$(dirname "$IH")/decision-log.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
 done
@@ -203,7 +203,7 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ]'
+check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ] && [ ! -e "$C/commands/decision.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
 
@@ -309,6 +309,28 @@ check "lesson-search: no match says so" 'grep -qF "none: nothing written down me
 ( cd "$lp" && HOME="$lh" "$SH" "$LS" >/dev/null 2>&1 ); rc=$?
 check "lesson-search: no keyword -> usage, rc!=0" '[ $rc -ne 0 ]'
 check "/lesson runs the installed script, never strengthens the user's words, asks on conflict" "grep -qF 'hooks/harnessoperator/lesson-search.sh' \"$CMDS/lesson.md\" && grep -qi 'never strengthen' \"$CMDS/lesson.md\" && grep -qi 'contradicting rule' \"$CMDS/lesson.md\""
+
+# --- decision log (/decision's script + the SessionStart pointer) -------------------------
+DL="$REPO/scripts/decision-log.sh"
+check "decision-log.sh: executable, bash -n" '[ -x "$DL" ] && bash -n "$DL"'
+dp="$sandbox/dproj"; mkdir -p "$dp/sub"; git -C "$dp" init -q
+dslug=$(git -C "$dp" rev-parse --show-toplevel | sed 's#[^A-Za-z0-9]#-#g'); dfile="$sandbox/.claude/checkpoints/$dslug/DECISIONS.md"
+dl() { (cd "$dp/sub" && HOME="$sandbox" "$SH" "$DL" "$@"); }
+check "decision-log: empty log -> next is D1, list says none yet" '[ "$(dl next)" = D1 ] && dl list | grep -q "No decisions logged yet"'
+check "decision-log: path is keyed by repo root, beside checkpoints, folder 700" '[ "$(dl path)" = "$dfile" ] && [ "$(perm "$(dirname "$dfile")")" = 700 ]'
+printf '# Decisions — p\nintro\n\n## D1 — 2026-11-01 — Use npm\n- **Why:** x\n- **Status:** superseded by D3 (2026-11-20)\n\n## D2 — 2026-11-02 — Keep zero deps\n- **Status:** active\n\n## D3 — 2026-11-20 — Use bun, not npm\n- **Supersedes:** D1\n- **Status:** active\n\n## D10 — 2026-11-21 — Ten\n- **Status:** Active\n' > "$dfile"
+dlist=$(dl list)
+check "decision-log: list shows only active entries, superseded left out" 'grep -qF -- "- D2 — 2026-11-02 — Keep zero deps" <<<"$dlist" && grep -qF -- "- D3 — 2026-11-20 — Use bun, not npm" <<<"$dlist" && ! grep -qF "Use npm" <<<"$dlist"'
+check "decision-log: list counts active and superseded" 'grep -qF "3 active, 1 superseded" <<<"$dlist"'
+check "decision-log: next is numeric, not alphabetic (D10 -> D11)" '[ "$(dl next)" = D11 ]'
+check "decision-log: unknown subcommand -> usage, rc!=0" '! dl bogus >/dev/null 2>&1'
+out=$(jq -nc --arg c "$dp" '{hook_event_name:"SessionStart",source:"startup",session_id:"d1",cwd:$c}' | run)
+check "SessionStart startup: names the active decision count and file" 'ctx "$out" | grep -qF "3 settled decisions for this project: $dfile"'
+dp2="$sandbox/dproj2"; mkdir -p "$dp2"; git -C "$dp2" init -q
+out=$(jq -nc --arg c "$dp2" '{hook_event_name:"SessionStart",source:"startup",session_id:"d2",cwd:$c}' | run)
+check "SessionStart startup: no checkpoint and no decisions -> silent" '[ -z "$out" ]'
+check "/decision: append-only, supersede by Status line, honest Decided by" "grep -qF 'hooks/harnessoperator/decision-log.sh' \"$CMDS/decision.md\" && grep -qi 'never delete or reword an old entry' \"$CMDS/decision.md\" && grep -qF 'Decided by' \"$CMDS/decision.md\""
+check "/checkpoint logs its decisions into DECISIONS.md" "grep -qF 'DECISIONS.md' \"$CMDS/checkpoint.md\""
 
 # --- evidence gate (Stop hook) ----------------------------------------------------------
 GATE="$REPO/hooks/evidence-gate.sh"

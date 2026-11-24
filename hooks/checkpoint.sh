@@ -114,6 +114,14 @@ case "$event" in
     ;;
   SessionStart)
     manual=$( [ -f "$dir/CHECKPOINT.md" ] && echo "$dir/CHECKPOINT.md")
+    # Settled choices (/decision) are named at every start, so a session sees that a choice
+    # was made before it reopens one. Only the count and path: reading stays on demand.
+    decisions() {
+      local f="$1/DECISIONS.md" all old
+      [ -f "$f" ] || return 0
+      all=$(grep -c '^## D[0-9]' "$f"); old=$(grep -ciE '^- \*\*Status:\*\* *superseded' "$f")
+      [ $((all - old)) -gt 0 ] && echo "$((all - old)) settled decisions for this project: $f. Check it before reopening a choice."
+    }
     if [ "$(field .source)" = startup ]; then
       # A brand-new session: just say a checkpoint exists, don't load it (cheap).
       newest=$(ls -t "$dir/CHECKPOINT.md" "$dir/latest.md" 2>/dev/null | head -1)
@@ -129,8 +137,9 @@ case "$event" in
               seen="$seen $d"; echo "$f ($(age "$f") old)"; done | head -3 | paste -sd ';' - | sed 's/;/; /g')
         [ -n "$recent" ] && ctx="${ctx:+$ctx }Newest checkpoints of projects inside this folder: $recent."
       fi
+      [ -n "$ctx" ] && ctx="$ctx Read one only if the user resumes earlier work or runs /summary."
+      dec=$(decisions "$dir"); [ -n "$dec" ] && ctx="${ctx:+$ctx }$dec"
       [ -z "$ctx" ] && exit 0
-      ctx="$ctx Read one only if the user resumes earlier work or runs /summary."
     else
       # This session's own newest checkpoint, not whichever session compacted last. Search
       # every project folder: an umbrella session's summaries live under the project it
@@ -143,6 +152,7 @@ case "$event" in
       ctx="Context was just compacted. Checkpoint for this session: ${own:-none}."
       [ -n "$manual" ] && ctx="$ctx A manual /checkpoint file also exists: $manual. Read both; it may be newer or more structured."
       ctx="$ctx Full pre-compact transcript: $raw. Before continuing: re-verify live state (git status, branches, PRs, servers) against the checkpoint; if a detail is missing from the summary, grep the transcript instead of guessing."
+      dec=$(decisions "$dir"); [ -n "$dec" ] && ctx="$ctx $dec"
     fi
     jq -n --arg ctx "$ctx" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$ctx}}'
     ;;

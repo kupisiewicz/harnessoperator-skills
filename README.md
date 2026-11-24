@@ -11,6 +11,7 @@ build their own. Part of the **Harness Operator** project. It targets
 - **Staffing subagents takes a paragraph every time.** That's `/swarm`.
 - **"Tests pass" and "deployed" get said without being checked.** That's the evidence gate.
 - **The same correction gets typed again next week.** That's `/lesson`.
+- **A settled choice gets argued again in the next session.** That's `/decision`.
 
 | Skill | What it does | How it runs |
 |---|---|---|
@@ -21,6 +22,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
 | **`/compact-check`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
 | **`/lesson`** | Turns a correction into one rule, with its why and how to apply it. It checks every existing rule for a duplicate or a conflict, then files the rule once: in global or project `CLAUDE.md`, or in memory. | You type it |
+| **`/decision`** | Keeps a per-project, append-only `DECISIONS.md`: what was decided, by whom, why, and what was rejected. A later decision supersedes an earlier one but never rewrites it. Every new session is told how many decisions are in force. `/checkpoint` adds its decisions automatically. | You type it (and `/checkpoint`) |
 | **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
 
 ---
@@ -62,12 +64,13 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md`, `commands/decision.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `hooks/evidence-gate.sh` | `~/.claude/hooks/harnessoperator/evidence-gate.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
 | `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/compact-check`, not a hook) |
 | `scripts/lesson-search.sh` | `~/.claude/hooks/harnessoperator/lesson-search.sh` (run by `/lesson`, not a hook) |
+| `scripts/decision-log.sh` | `~/.claude/hooks/harnessoperator/decision-log.sh` (run by `/decision`, `/checkpoint` and `/summary`, not a hook) |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
@@ -234,6 +237,32 @@ sessions follow:
   with a backup. A project `CLAUDE.md` that others share, or a rule that reverses an
   existing one, waits for your yes.
 
+### `/decision`: settled once, not argued again
+
+A checkpoint is replaced every time, and a compact summary is a narrative, so a choice
+made three sessions ago tends to come back up as a fresh question. `/decision` keeps
+them in `~/.claude/checkpoints/<project>/DECISIONS.md`:
+
+```
+## D3 — 2026-11-24 — Name the command /compact-check
+- **Decided by:** user
+- **Why:** /docompact reads like an order to compact; the command only advises
+- **Rejected:** /docompact, /shouldcompact
+- **Applies to:** harnessoperator-skills
+- **Status:** active
+```
+
+- `/decision <the choice>` records one. With no text, `/decision` lists the ones in
+  force.
+- **Append-only.** Reversing a decision adds a new entry that supersedes the old one,
+  whose Status line is the only thing that changes. It's recorded only if the user
+  made the reversal.
+- **Honest authorship.** "Decided by" says whether it was the user, the model with the
+  user's approval, or the model alone.
+- **Seen at every start.** A new session, and a session right after a compact, are told
+  "N settled decisions for this project: <path>". `/summary` lists them, and
+  `/checkpoint` adds its own "Decisions made" items to the log.
+
 ### The evidence gate: claims need a check from this turn
 
 A rule in `CLAUDE.md` that says "verify before you claim" is only a request. This
@@ -312,6 +341,7 @@ Turn it off for one session with `HO_EVIDENCE_GATE=off`.
 ~/.claude/checkpoints/<project-slug>/
 ├── CHECKPOINT.md                     ← /checkpoint (structured, verified)
 ├── CHECKPOINT-2026-03-01_120000.md   ← each earlier /checkpoint, archived on rewrite
+├── DECISIONS.md                      ← /decision log, append-only (never pruned)
 ├── latest.md                         ← last compact summary, scratchpad removed
 ├── 2026-03-02_184012_<session>.md    ← every compact summary, full (last 10 kept)
 └── <session>.transcript.jsonl        ← full pre-compact transcript (hardlink)
@@ -402,7 +432,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-154 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+165 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See
