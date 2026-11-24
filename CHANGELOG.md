@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Evidence gate** (`hooks/evidence-gate.sh`, a `Stop` hook): when the final reply claims tests pass, something is deployed or live, merged or pushed, fixed, or builds, it checks that the turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove the claim or mark it UNVERIFIED. It ignores code, quoted words, negated or hedged sentences, and turns that relayed subagents' work. Replayed over 406 real turns, it blocked 3, all of them claims made from memory. `HO_EVIDENCE_GATE=off` disables it.
+
 - **`/context-audit` inventory**: a memory note that is not in the index but is linked from a topic file the index links now counts as reachable and isn't flagged. Only notes that are neither get reported as unreachable. This lets a large memory keep its always-loaded index small.
 - **`/compact-check`**: answers "should I compact, and is it safe right now?" in three lines. `scripts/compact-check.sh` measures the context from the last model turn's token usage in the session transcript, against a window that is detected (`HO_CONTEXT_WINDOW`, a `[1m]` model id, or a context already past 200k) or stated as assumed. It also lists repos touched with uncommitted and unpushed work, and checkpoint age. The model adds work in flight. Read-only.
 - **`/context-audit`**: audits everything loaded before the first message. `scripts/context-inventory.sh` measures it from the session transcript: sizes, files cut off on load, memory index faults, dead paths, stray HTML and stale dated claims. The model then judges contradictions, duplicates, misplaced and vague rules. Reports go to `~/.claude/context-audits/<project>/`, and fixes are applied only on approval.

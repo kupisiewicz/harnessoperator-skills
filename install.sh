@@ -2,6 +2,7 @@
 # Installs harnessoperator-skills into ~/.claude (user scope, all projects):
 #   commands/*.md                   -> ~/.claude/commands/
 #   hooks/checkpoint.sh             -> ~/.claude/hooks/harnessoperator/checkpoint.sh
+#   hooks/evidence-gate.sh          -> ~/.claude/hooks/harnessoperator/evidence-gate.sh (Stop)
 #   scripts/*.sh                    -> ~/.claude/hooks/harnessoperator/ (helpers the commands run)
 #   hook wiring                     -> ~/.claude/settings.json (merged, never replaced)
 #   compact/compact-instructions.md -> ~/.claude/CLAUDE.md (between marker comments)
@@ -12,6 +13,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")" && pwd)
 claude="$HOME/.claude"
 hook="$claude/hooks/harnessoperator/checkpoint.sh"
+gate="$claude/hooks/harnessoperator/evidence-gate.sh"
 settings="$claude/settings.json"
 claude_md="$claude/CLAUDE.md"
 stamp=$(date +%Y%m%d-%H%M%S)
@@ -39,6 +41,7 @@ done
 
 # 2. Hook script, plus the helper scripts commands call (they live beside the hook).
 cp "$repo/hooks/checkpoint.sh" "$hook"; chmod +x "$hook"; say "hook: $hook"
+cp "$repo/hooks/evidence-gate.sh" "$gate"; chmod +x "$gate"; say "hook: $gate"
 for f in "$repo"/scripts/*.sh; do
   cp "$f" "$(dirname "$hook")/"; chmod +x "$(dirname "$hook")/$(basename "$f")"; say "helper: $(basename "$f")"
 done
@@ -48,20 +51,21 @@ done
 backup "$settings"
 [ -f "$settings" ] || echo '{}' > "$settings"
 tmp=$(mktemp)
-jq --arg cmd "$hook" '
-  def wire($event; $matcher; $timeout):
+jq --arg cmd "$hook" --arg gate "$gate" '
+  def wire($event; $matcher; $timeout; $c):
     .hooks[$event] = (
       ((.hooks[$event] // [])
-        | map(.hooks |= map(select(.command != $cmd)))
+        | map(.hooks |= map(select(.command != $c)))
         | map(select((.hooks | length) > 0)))
-      + [ ({hooks: [{type: "command", command: $cmd, timeout: $timeout}]}
+      + [ ({hooks: [{type: "command", command: $c, timeout: $timeout}]}
            + (if $matcher then {matcher: $matcher} else {} end)) ]);
   .hooks //= {}
-  | wire("PreCompact";   null;              30)
-  | wire("PostCompact";  null;              30)
-  | wire("SessionStart"; "compact|startup"; 10)
+  | wire("PreCompact";   null;              30; $cmd)
+  | wire("PostCompact";  null;              30; $cmd)
+  | wire("SessionStart"; "compact|startup"; 10; $cmd)
+  | wire("Stop";         null;              10; $gate)
 ' "$settings" > "$tmp" && mv "$tmp" "$settings"
-say "hooks: PreCompact, PostCompact, SessionStart (compact|startup) in $settings"
+say "hooks: PreCompact, PostCompact, SessionStart (compact|startup), Stop (evidence gate) in $settings"
 
 # 4. Compact instructions. Replace our own marked block; never touch a hand-written one.
 touch "$claude_md"

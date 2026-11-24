@@ -178,6 +178,9 @@ check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$I
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
 done
+IG="$(dirname "$IH")/evidence-gate.sh"
+gcount() { jq --arg c "$IG" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
+check "install x3: evidence gate executable, exactly one Stop entry" '[ -x "$IG" ] && [ "$(gcount Stop)" = 1 ] && [ "$(gcount SessionStart)" = 0 ]'
 for src in compact startup; do
   check "install: SessionStart matcher covers $src" \
     "jq -e --arg c \"\$IH\" '.hooks.SessionStart[] | select(.matcher as \$m | \"$src\"|test(\"^(\"+\$m+\")\$\")) | .hooks[] | select(.command==\$c)' \"\$S\" >/dev/null"
@@ -198,7 +201,7 @@ check "install: invalid settings.json -> refuses, unchanged" '[ $rc -ne 0 ] && [
 
 mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
-check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)" = 000 ]'
+check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
 check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
@@ -283,6 +286,61 @@ cp "$cc/t.jsonl" "$pj/mine.jsonl"; sleep 1; cp "$cc/big.jsonl" "$pj/neighbour.js
 out=$(CLAUDE_CODE_SESSION_ID=mine ccrun)
 check "compact-check: picks this session's transcript by CLAUDE_CODE_SESSION_ID, not the newest" 'grep -qF "mine.jsonl" <<<"$out" && grep -qF "142000 of" <<<"$out"'
 check "/compact-check runs the installed script, stays read-only and fixes the verdict shape" "grep -qF 'hooks/harnessoperator/compact-check.sh' \"$CMDS/compact-check.md\" && grep -qi 'never start a compaction' \"$CMDS/compact-check.md\" && grep -q '^COMPACT: ' \"$CMDS/compact-check.md\" && grep -q '^SAFE NOW: ' \"$CMDS/compact-check.md\""
+
+# --- evidence gate (Stop hook) ----------------------------------------------------------
+GATE="$REPO/hooks/evidence-gate.sh"
+check "evidence-gate.sh: executable, bash -n" '[ -x "$GATE" ] && bash -n "$GATE"'
+eg="$sandbox/gate"; mkdir -p "$eg"
+# Transcript builders: a typed user message, a tool call, its result, a reply.
+u()  { jq -nc --arg t "$1" '{type:"user",message:{content:$t}}'; }
+tc() { jq -nc --arg n "$1" --arg c "$2" '{type:"assistant",message:{content:[{type:"tool_use",name:$n,input:{command:$c,file_path:"/x"}}]}}';
+       jq -nc '{type:"user",message:{content:[{type:"tool_result",content:"ok"}]}}'; }
+say(){ jq -nc --arg t "$1" '{type:"assistant",message:{content:[{type:"text",text:$t}]}}'; }
+gate() {   # transcript file -> hook output (empty = allowed to stop)
+  jq -nc --arg t "$1" --argjson a "${2:-false}" '{hook_event_name:"Stop",session_id:"g",transcript_path:$t,stop_hook_active:$a}' |
+    HOME="$sandbox" "$SH" "$GATE"
+}
+blocks() { [ "$(jq -r .decision <<<"$1" 2>/dev/null)" = block ]; }
+
+{ u "run it"; tc Edit ""; say "Done. All tests pass."; } > "$eg/t1.jsonl"
+out=$(gate "$eg/t1.jsonl"); rc=$?
+check "gate: 'tests pass' with no test run -> block, rc=0" 'blocks "$out" && [ $rc -eq 0 ] && jq -r .reason <<<"$out" | grep -qF "tests pass"'
+{ u "run it"; tc Edit ""; tc Bash "bash tests/test-checkpoint.sh"; say "All tests pass (104)."; } > "$eg/t2.jsonl"
+check "gate: test run after the edit -> allowed" '[ -z "$(gate "$eg/t2.jsonl")" ]'
+{ u "run it"; tc Bash "bash tests/run.sh"; tc Edit ""; say "Tests pass."; } > "$eg/t3.jsonl"
+check "gate: test run BEFORE the last edit does not count" 'blocks "$(gate "$eg/t3.jsonl")"'
+{ u "old"; tc Bash "npm test"; say "ok"; u "now"; tc Edit ""; say "Tests pass."; } > "$eg/t4.jsonl"
+check "gate: evidence from an earlier turn does not count" 'blocks "$(gate "$eg/t4.jsonl")"'
+{ u "ship"; say "The API is not deployed yet. Tests: UNVERIFIED, I didn'\''t run them."; } > "$eg/t5.jsonl"
+check "gate: negated or UNVERIFIED claims are not claims" '[ -z "$(gate "$eg/t5.jsonl")" ]'
+{ u "x"; say $'Run this:\n```\nnpm test  # all tests pass\n```\nThen `deployed` appears.'; } > "$eg/t6.jsonl"
+check "gate: claims inside code are ignored" '[ -z "$(gate "$eg/t6.jsonl")" ]'
+{ u "ship"; tc Bash "curl -sI https://example.test/health"; say "It is deployed and live."; } > "$eg/t7.jsonl"
+check "gate: deploy claim with a curl -> allowed" '[ -z "$(gate "$eg/t7.jsonl")" ]'
+{ u "merge"; tc Bash "gh pr merge 3 --squash"; say "Merged."; } > "$eg/t8.jsonl"
+check "gate: merge claim with gh pr merge -> allowed" '[ -z "$(gate "$eg/t8.jsonl")" ]'
+{ u "fix"; tc Edit ""; say "Fixed."; } > "$eg/t9.jsonl"
+check "gate: 'fixed' with only an edit -> block" 'blocks "$(gate "$eg/t9.jsonl")"'
+check "gate: second stop in a row (stop_hook_active) -> never loops" '[ -z "$(gate "$eg/t1.jsonl" true)" ]'
+check "gate: HO_EVIDENCE_GATE=off -> silent" '[ -z "$(jq -nc --arg t "$eg/t1.jsonl" "{transcript_path:\$t}" | HO_EVIDENCE_GATE=off "$SH" "$GATE")" ]'
+check "gate: only the reply after the last tool call is judged" '{ u "x"; say "Tests pass, I think."; tc Bash "ls"; say "Listed the folder."; } > "$eg/t10.jsonl"; [ -z "$(gate "$eg/t10.jsonl")" ]'
+# Regressions from replaying 406 real turns: each of these was a false alarm once.
+{ u "x"; say 'A hook that checks claims like "deployed" or “tests pass”.'; } > "$eg/r1.jsonl"
+check "gate: words in quotation marks are mentioned, not claimed" '[ -z "$(gate "$eg/r1.jsonl")" ]'
+{ u "x"; tc Bash "curl -sI https://example.test"; jq -nc '"{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Edit\",\"input\":{\"file_path\":\"/h/.claude/projects/p/memory/x.md\"}}]}}" | fromjson'; say "It is live."; } > "$eg/r2.jsonl"
+check "gate: writing memory or docs after the check does not reset it" '[ -z "$(gate "$eg/r2.jsonl")" ]'
+{ u "x"; say "The agents corrections are merged into the spreadsheet."; } > "$eg/r3.jsonl"
+check "gate: data being merged is not a git claim" '[ -z "$(gate "$eg/r3.jsonl")" ]'
+{ u "x"; say "PR #12 is merged."; } > "$eg/r4.jsonl"
+check "gate: a PR merge claim with no git evidence still blocks" 'blocks "$(gate "$eg/r4.jsonl")"'
+{ u "x"; tc Agent ""; say "PR #12 is merged and all tests pass."; } > "$eg/r5.jsonl"
+check "gate: a turn that delegated to agents relays their checks" '[ -z "$(gate "$eg/r5.jsonl")" ]'
+{ u "<task-notification>agent done</task-notification>"; say "Tests pass, per the agent."; } > "$eg/r6.jsonl"
+check "gate: a turn opened by an agent report is a relay" '[ -z "$(gate "$eg/r6.jsonl")" ]'
+{ u "x"; say "Nothing is merged or deployed."; } > "$eg/r7.jsonl"
+check "gate: 'Nothing is merged or deployed' claims nothing" '[ -z "$(gate "$eg/r7.jsonl")" ]'
+echo 'not json' | HOME="$sandbox" "$SH" "$GATE" >/dev/null 2>&1; rc=$?
+check "gate: garbage stdin / missing transcript -> rc=0, silent" '[ $rc -eq 0 ] && [ -z "$(gate /nonexistent.jsonl)" ]'
 
 # --- prompts agree with the hook ----------------------------------------------
 check "/summary has an 'all' overview mode" "grep -q 'argument is exactly \`all\`' \"$CMDS/summary.md\""
