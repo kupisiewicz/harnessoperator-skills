@@ -211,7 +211,10 @@ ca="$sandbox/ctx"; mkdir -p "$ca/mem"
 printf 'Rules\nKeep `<br>` as an example.\nOops </strong></p> left over.\nKey file: /Users/nobody-ho-test/gone.env\n```\n/Users/nobody/in-a-fence\n```\nAPI LIVE 2020-01-02 on the box.\n' "$ca" > "$ca/CLAUDE.md"
 printf 'short file, loaded in full\n' > "$ca/RULES.md"
 printf -- '- [A](a.md) — ok\n- [B](b.md) — missing\n' > "$ca/mem/MEMORY.md"
-: > "$ca/mem/a.md"; : > "$ca/mem/orphan.md"
+# a.md is a topic file: it links one note by [[name]] and one by (file.md), so both are
+# reachable one hop from the index; orphan.md is reachable from nowhere.
+printf 'See [[hub-note]] and [sub](sub.md).\n' > "$ca/mem/a.md"
+: > "$ca/mem/hub-note.md"; : > "$ca/mem/sub.md"; : > "$ca/mem/orphan.md"
 cut=$(head -c 20 "$ca/CLAUDE.md")
 jq -nc --arg p1 "$ca/CLAUDE.md" --arg c1 "$cut" --arg p2 "$ca/RULES.md" --rawfile c2 "$ca/RULES.md" --arg p3 "$ca/mem/MEMORY.md" --rawfile c3 "$ca/mem/MEMORY.md" '
   {timestamp:"2026-01-01T00:00:00Z", attachment:{type:"instructions", files:[
@@ -229,7 +232,8 @@ check "inventory: 7 rows, total is their sum" '[ "$(grep -cE "^\| [0-9]+ \|" <<<
 check "inventory: prefix-only copy reported TRUNCATED" 'grep -qF "TRUNCATED: $ca/CLAUDE.md" <<<"$inv"'
 check "inventory: full copy (minus final newline) is ok" 'grep -qF "ok: $ca/RULES.md" <<<"$inv"'
 check "inventory: memory link to missing file found" 'grep -A1 "links to missing files: 1" <<<"$inv" | grep -qF b.md'
-check "inventory: unlinked memory file found" 'grep -qF "orphan.md" <<<"$inv"'
+check "inventory: unreachable memory file found" 'grep -A1 "unreachable (not in the index, not one link away): 1" <<<"$inv" | grep -qF orphan.md'
+check "inventory: notes one link away counted fine, not listed" 'grep -qF "linked from a topic file it links (fine): 2" <<<"$inv" && ! grep -qE "^  - (hub-note|sub)\.md" <<<"$inv"'
 check "inventory: dead path in prose found" 'grep -qF "/Users/nobody-ho-test/gone.env" <<<"$inv"'
 check "inventory: path inside a code fence ignored" '! grep -qF "in-a-fence" <<<"$inv"'
 check "inventory: stray HTML found, <br> in backticks ignored" 'grep -qF "</strong></p>" <<<"$inv" && ! grep -F "CLAUDE.md:" <<<"$inv" | grep -qF "<br>"'
