@@ -20,7 +20,7 @@ Steps:
    `d=~/.claude/checkpoints/$( (git rev-parse --show-toplevel 2>/dev/null || pwd -P) | sed 's#[^A-Za-z0-9]#-#g'); ls -lt "$d"/CHECKPOINT.md "$d"/latest.md 2>/dev/null`
    **Umbrella folder:** if the working directory is not a git repo, its projects' checkpoints live in folders named `$d-<project>`. If this session worked in one project, use that folder as `$d`. If the user named a project, use its folder. Otherwise list `ls -dt "$d"-*/` and do the `all` overview restricted to those folders, then stop.
 
-2. **No checkpoint (neither file exists):** read `~/.claude/commands/checkpoint.md` and follow it exactly, but skip its step 5 (the print). Then go to step 4 using the file it wrote.
+2. **No checkpoint (neither file exists):** read `~/.claude/commands/checkpoint.md` and follow it exactly, but skip its step 6 (the print). Then go to step 4 using the file it wrote.
 
 3. **A checkpoint exists:** read both files if both exist.
    - Use `CHECKPOINT.md` as the backbone, since it is structured and verified.
@@ -28,6 +28,7 @@ Steps:
    - If `latest.md`'s `session:` line is not this session, treat it as another session's work and say so.
    - If this conversation already holds the compact summary (it begins "This session is being continued…"), skip reading `latest.md`; it is the same text.
    - Add any work in this conversation that happened after the newest timestamp.
+   - If `$d/DECISIONS.md` exists, take its active decisions: `bash ~/.claude/hooks/harnessoperator/decision-log.sh list`.
    - **Re-check live state** in every repo the checkpoint names:
      `git status -sb; git branch -vv; git log --oneline -10 --all --decorate; git log --branches --not --remotes --oneline`
      Also run health or URL checks where the checkpoint claims a deploy.
@@ -54,7 +55,7 @@ One or two lines.
 - <what the checkpoint says vs what is true now> (or "None")
 
 ### Decisions & gotchas to remember
-- short bullets
+- short bullets; active decisions by their D-number from DECISIONS.md
 
 ### ▶ Resume here
 1. 2. 3.

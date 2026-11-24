@@ -26,7 +26,7 @@ bash tests/test-checkpoint.sh
 
 ## Layout
 
-`commands/` (6 files) · `compact/` (1 file) · `hooks/` (2 files) · `scripts/` (3 files) · `tests/` (1 file)
+`commands/` (7 files) · `compact/` (1 file) · `hooks/` (2 files) · `scripts/` (4 files) · `tests/` (1 file)
 
 ## Where the detail is
 

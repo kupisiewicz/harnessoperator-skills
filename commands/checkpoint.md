@@ -17,7 +17,8 @@ Steps:
 4. **Archive, then write.** Move the previous checkpoint aside, named by when it was written, so every earlier state stays on disk:
    `[ -f "$d/CHECKPOINT.md" ] && mv "$d/CHECKPOINT.md" "$d/CHECKPOINT-$(date -r "$d/CHECKPOINT.md" +%F_%H%M%S).md"`
    Then write a fresh `$d/CHECKPOINT.md`. Keep `## History` at the bottom, with one line per checkpoint: `- <YYYY-MM-DD HH:MM> — <one-line state>`.
-5. **Print** its path and a 5-line summary. Skip this when /summary called you, since it presents the result itself.
+5. **Log decisions.** For each item under "Decisions made" that isn't in `$d/DECISIONS.md` yet, record it the way `~/.claude/commands/decision.md` says: same format, next ID, supersede instead of rewriting. Only real choices go in, not tasks. The checkpoint gets replaced next time; the log is what keeps a decision.
+6. **Print** its path and a 5-line summary. Skip this when /summary called you, since it presents the result itself.
 
 Rules:
 - Exact paths, branch names, commit SHAs, PR URLs, versions and commands. No vague words ("mostly", "should work").
