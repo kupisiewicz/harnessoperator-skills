@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# harnessoperator-skills — compact check: the measurable half of /docompact.
+# harnessoperator-skills — compact check: the measurable half of /compact-check.
 # Prints how full the session's context is and what state would ride through a compaction
 # only as a summary: repos with uncommitted or unpushed work, and how old the project's
 # checkpoints are. Work in flight (running agents, half-done edits) is not in any file, so

@@ -7,7 +7,7 @@ Skills, hooks and instructions for people who run AI coding harnesses all day, o
 build their own. Part of the **Harness Operator** project. It targets
 [Claude Code](https://docs.claude.com/en/docs/claude-code) and solves two problems:
 
-- **Long sessions lose track of their work.** That's compact, `/checkpoint`, `/summary` and `/docompact`.
+- **Long sessions lose track of their work.** That's compact, `/checkpoint`, `/summary` and `/compact-check`.
 - **Staffing subagents takes a paragraph every time.** That's `/swarm`.
 
 | Skill | What it does | How it runs |
@@ -17,7 +17,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/summary`** | Shows what's done, in progress and not started, from the latest checkpoint, checked against live git state. `/summary all` covers every project. | You type it |
 | **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
 | **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
-| **`/docompact`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
+| **`/compact-check`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
 
 ---
 
@@ -58,10 +58,10 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/docompact.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
-| `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/docompact`, not a hook) |
+| `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/compact-check`, not a hook) |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
@@ -178,7 +178,7 @@ style. A contradiction in any of them leaves the model guessing which rule you m
 - **Changes nothing on its own.** Fixes are applied only after you approve them, with a
   backup, and never to installer-managed blocks or generated files.
 
-### `/docompact`: compact now, or not yet?
+### `/compact-check`: compact now, or not yet?
 
 Two questions, one short answer: is the context big enough that compacting helps, and
 would compacting right now lose anything?
@@ -200,7 +200,7 @@ DO FIRST: wait for the agents, /checkpoint, then /compact.
   adds what no file records: agents or shells still running, a half-done edit, a question
   you haven't answered.
 - **What a compact already saves.** The hook keeps the raw transcript and the summary, so
-  nothing is unrecoverable. `/docompact` still sends you to `/checkpoint` first when
+  nothing is unrecoverable. `/compact-check` still sends you to `/checkpoint` first when
   state lives only in the context, because that is the verified record.
 - **Read-only.** It never compacts, commits or edits anything.
 
@@ -283,7 +283,7 @@ Set these in the `env` block of `~/.claude/settings.json`:
 |---|---|---|
 | `HO_CHECKPOINT_KEEP` | `10` | Dated compact summaries kept per project |
 | `HO_CHECKPOINT_DAYS` | `60` | Saved transcripts older than this many days are deleted |
-| `HO_CONTEXT_WINDOW` | detected, else `200000` | Context window in tokens that `/docompact` measures against |
+| `HO_CONTEXT_WINDOW` | detected, else `200000` | Context window in tokens that `/compact-check` measures against |
 
 ```json
 { "env": { "HO_CHECKPOINT_KEEP": "20", "HO_CHECKPOINT_DAYS": "30" } }

@@ -173,7 +173,7 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/docompact.md" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ]'
 check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
@@ -200,7 +200,7 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)" = 000 ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/docompact.md" ]'
+check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
 
@@ -243,7 +243,7 @@ check "inventory: skill entries ranked, multi-line entry counted whole" 'grep -A
 check "inventory: no transcript -> clear error, rc!=0" '[ $rc -ne 0 ]'
 check "/context-audit runs the installed script and gates edits on approval" "grep -qF 'hooks/harnessoperator/context-inventory.sh' \"$CMDS/context-audit.md\" && grep -qi 'only after the user' \"$CMDS/context-audit.md\""
 
-# --- compact check (/docompact's script) ---------------------------------------------
+# --- compact check (/compact-check's script) ---------------------------------------------
 CC="$REPO/scripts/compact-check.sh"
 check "compact-check.sh: executable, bash -n" '[ -x "$CC" ] && bash -n "$CC"'
 cc="$sandbox/cc"; mkdir -p "$cc"; git init -q "$cc/repo"; : > "$cc/repo/edited.txt"
@@ -282,7 +282,7 @@ pj="$sandbox/.claude/projects/-some-project"; mkdir -p "$pj"
 cp "$cc/t.jsonl" "$pj/mine.jsonl"; sleep 1; cp "$cc/big.jsonl" "$pj/neighbour.jsonl"
 out=$(CLAUDE_CODE_SESSION_ID=mine ccrun)
 check "compact-check: picks this session's transcript by CLAUDE_CODE_SESSION_ID, not the newest" 'grep -qF "mine.jsonl" <<<"$out" && grep -qF "142000 of" <<<"$out"'
-check "/docompact runs the installed script, stays read-only and fixes the verdict shape" "grep -qF 'hooks/harnessoperator/compact-check.sh' \"$CMDS/docompact.md\" && grep -qi 'never start a compaction' \"$CMDS/docompact.md\" && grep -q '^COMPACT: ' \"$CMDS/docompact.md\" && grep -q '^SAFE NOW: ' \"$CMDS/docompact.md\""
+check "/compact-check runs the installed script, stays read-only and fixes the verdict shape" "grep -qF 'hooks/harnessoperator/compact-check.sh' \"$CMDS/compact-check.md\" && grep -qi 'never start a compaction' \"$CMDS/compact-check.md\" && grep -q '^COMPACT: ' \"$CMDS/compact-check.md\" && grep -q '^SAFE NOW: ' \"$CMDS/compact-check.md\""
 
 # --- prompts agree with the hook ----------------------------------------------
 check "/summary has an 'all' overview mode" "grep -q 'argument is exactly \`all\`' \"$CMDS/summary.md\""
