@@ -173,8 +173,8 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ]'
-check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ]'
+check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
 done
@@ -203,7 +203,7 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ]'
+check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
 
@@ -286,6 +286,29 @@ cp "$cc/t.jsonl" "$pj/mine.jsonl"; sleep 1; cp "$cc/big.jsonl" "$pj/neighbour.js
 out=$(CLAUDE_CODE_SESSION_ID=mine ccrun)
 check "compact-check: picks this session's transcript by CLAUDE_CODE_SESSION_ID, not the newest" 'grep -qF "mine.jsonl" <<<"$out" && grep -qF "142000 of" <<<"$out"'
 check "/compact-check runs the installed script, stays read-only and fixes the verdict shape" "grep -qF 'hooks/harnessoperator/compact-check.sh' \"$CMDS/compact-check.md\" && grep -qi 'never start a compaction' \"$CMDS/compact-check.md\" && grep -q '^COMPACT: ' \"$CMDS/compact-check.md\" && grep -q '^SAFE NOW: ' \"$CMDS/compact-check.md\""
+
+# --- lesson search (/lesson's script) ------------------------------------------------
+LS="$REPO/scripts/lesson-search.sh"
+check "lesson-search.sh: executable, bash -n" '[ -x "$LS" ] && bash -n "$LS"'
+lh="$sandbox/lhome"; lp="$sandbox/lproj"; mkdir -p "$lh/.claude" "$lp/sub"; git -C "$lp" init -q
+lmem="$lh/.claude/projects/$(printf '%s' "$lp" | sed 's#[^A-Za-z0-9]#-#g')/memory"; mkdir -p "$lmem"
+printf '# Global\n- Open the PR and stop.\n@~/.claude/extra.md\nUse `@not-an-import.md` as text.\n' > "$lh/.claude/CLAUDE.md"
+printf 'Imported: never force-push main.\n' > "$lh/.claude/extra.md"
+printf '# Project\n- Run the tests before a PR.\n' > "$lp/CLAUDE.md"
+printf -- '- [Merge rule](merge-rule.md) — open the PR, never merge\n' > "$lmem/MEMORY.md"
+printf -- '---\nname: merge-rule\ndescription: open the PR, never merge it\nmetadata:\n  type: feedback\n---\n\n**Never merge.** The PR stays open.\n' > "$lmem/merge-rule.md"
+printf -- '---\nname: history\ndescription: what shipped in March\nmetadata:\n  type: project\n---\n\nPR #4 merged; the PR is closed.\n' > "$lmem/history.md"
+lout=$(cd "$lp/sub" && HOME="$lh" "$SH" "$LS" PR force-push 2>&1); rc=$?
+check "lesson-search: rc=0, lists all three homes" '[ $rc -eq 0 ] && grep -qF "global (every project): $lh/.claude/CLAUDE.md" <<<"$lout" && grep -qF "this repo (committed" <<<"$lout" && grep -qF "auto memory (this machine only): $lmem/" <<<"$lout"'
+check "lesson-search: finds the rule in the global file and the project file" 'grep -qF "$lh/.claude/CLAUDE.md:2:- Open the PR" <<<"$lout" && grep -qF "$lp/CLAUDE.md:2:- Run the tests before a PR" <<<"$lout"'
+check "lesson-search: follows an @import, not one inside a code span" 'grep -qF "extra.md:1:Imported: never force-push" <<<"$lout" && ! grep -qF "not-an-import" <<<"$lout"'
+check "lesson-search: memory index and feedback notes searched in full" 'grep -qF "MEMORY.md:1:" <<<"$lout" && grep -qF "merge-rule.md:8:**Never merge.**" <<<"$lout"'
+check "lesson-search: project notes match only by description, not history" 'grep -c "history.md" <<<"$lout" | grep -qx 0'
+lout=$(cd "$lp" && HOME="$lh" "$SH" "$LS" zebra 2>&1)
+check "lesson-search: no match says so" 'grep -qF "none: nothing written down mentions these words yet" <<<"$lout"'
+( cd "$lp" && HOME="$lh" "$SH" "$LS" >/dev/null 2>&1 ); rc=$?
+check "lesson-search: no keyword -> usage, rc!=0" '[ $rc -ne 0 ]'
+check "/lesson runs the installed script, never strengthens the user's words, asks on conflict" "grep -qF 'hooks/harnessoperator/lesson-search.sh' \"$CMDS/lesson.md\" && grep -qi 'never strengthen' \"$CMDS/lesson.md\" && grep -qi 'contradicting rule' \"$CMDS/lesson.md\""
 
 # --- evidence gate (Stop hook) ----------------------------------------------------------
 GATE="$REPO/hooks/evidence-gate.sh"

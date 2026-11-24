@@ -10,6 +10,7 @@ build their own. Part of the **Harness Operator** project. It targets
 - **Long sessions lose track of their work.** That's compact, `/checkpoint`, `/summary` and `/compact-check`.
 - **Staffing subagents takes a paragraph every time.** That's `/swarm`.
 - **"Tests pass" and "deployed" get said without being checked.** That's the evidence gate.
+- **The same correction gets typed again next week.** That's `/lesson`.
 
 | Skill | What it does | How it runs |
 |---|---|---|
@@ -19,6 +20,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
 | **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
 | **`/compact-check`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
+| **`/lesson`** | Turns a correction into one rule, with its why and how to apply it. It checks every existing rule for a duplicate or a conflict, then files the rule once: in global or project `CLAUDE.md`, or in memory. | You type it |
 | **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
 
 ---
@@ -60,11 +62,12 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `hooks/evidence-gate.sh` | `~/.claude/hooks/harnessoperator/evidence-gate.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
 | `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/compact-check`, not a hook) |
+| `scripts/lesson-search.sh` | `~/.claude/hooks/harnessoperator/lesson-search.sh` (run by `/lesson`, not a hook) |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
@@ -206,6 +209,30 @@ DO FIRST: wait for the agents, /checkpoint, then /compact.
   nothing is unrecoverable. `/compact-check` still sends you to `/checkpoint` first when
   state lives only in the context, because that is the verified record.
 - **Read-only.** It never compacts, commits or edits anything.
+
+### `/lesson`: a correction, written down once
+
+When you correct the model ("never merge without asking", "comments explain why"),
+type `/lesson`, or `/lesson <the correction>`, and it becomes a rule that future
+sessions follow:
+
+- **Stated in your words.** The rule as one behaviour, its **Why** (your reason or the
+  incident), and **How to apply**. It never strengthens what you said: "prefer" stays a
+  preference, and "in this repo" doesn't become "everywhere".
+- **Filed in one home.**
+  - State that will change goes to memory.
+  - A project-only convention goes to that project's `CLAUDE.md` (shared) or memory
+    (personal).
+  - How you work everywhere goes to the global `~/.claude/CLAUDE.md`.
+  - If a hook or a permission could enforce it, it says so too.
+- **Checked against what's already there.** `lesson-search.sh` lists the homes and every
+  existing line on the topic: the global file and its `@imports`, every `CLAUDE.md` from
+  here up, rules folders, and the memory index, descriptions and feedback notes. If the
+  rule already exists, it's strengthened instead of duplicated. If it conflicts with an
+  existing rule, you choose which one wins, and the loser is changed too.
+- **Asks only when it should.** Memory and the global file are written straight away,
+  with a backup. A project `CLAUDE.md` that others share, or a rule that reverses an
+  existing one, waits for your yes.
 
 ### The evidence gate: claims need a check from this turn
 
@@ -373,7 +400,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-141 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+150 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See
