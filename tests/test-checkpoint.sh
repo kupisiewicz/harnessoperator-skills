@@ -406,6 +406,12 @@ check "gate: a site called live with only a file compare -> still blocks" 'block
 check "gate: 'installed and live' with no install or compare run -> still blocks" 'blocks "$(gate "$eg/r10.jsonl")"'
 { u "Stop hook feedback: Evidence gate: your final reply makes claims"; say "PR #11 is merged; proof was in the previous turn."; } > "$eg/r11.jsonl"
 check "gate: the turn answering its own nudge is never nudged again" '[ -z "$(gate "$eg/r11.jsonl")" ]'
+# The second live false alarm: a helper script written to the scratchpad after the test run.
+w() { jq -nc --arg p "$1" '{type:"assistant",message:{content:[{type:"tool_use",name:"Write",input:{file_path:$p}}]}}'; }
+{ u "x"; tc Bash "bash tests/run.sh"; w /private/tmp/claude-501/p/s/scratchpad/ship.sh; w /tmp/note.sh; say "All 169 tests pass."; } > "$eg/r12.jsonl"
+check "gate: scratchpad and /tmp edits after the test run do not reset it" '[ -z "$(gate "$eg/r12.jsonl")" ]'
+{ u "x"; tc Bash "bash tests/run.sh"; w /repo/tmp/fix.sh; say "All 169 tests pass."; } > "$eg/r13.jsonl"
+check "gate: a project file in a folder named tmp still resets it" 'blocks "$(gate "$eg/r13.jsonl")"'
 echo 'not json' | HOME="$sandbox" "$SH" "$GATE" >/dev/null 2>&1; rc=$?
 check "gate: garbage stdin / missing transcript -> rc=0, silent" '[ $rc -eq 0 ] && [ -z "$(gate /nonexistent.jsonl)" ]'
 
