@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-25
+
+**Three groups of skills now:** Remember (work survives compaction and new sessions), Prove (agree the task, check every claim) and Run (swarms, context audit, health checks). New since 0.1.0: `/swarm`, `/context-audit`, `/compact-check`, `/lesson` (with `/lesson mine`), `/decision`, `/brief` with its guard, the evidence gate, project picking, `/doctor` and `/cure`. Ten commands and three hooks in all, still only bash and jq. 219 tests, CI on Ubuntu and macOS.
 
 - **`/doctor` and `/cure`**: find what is broken in the setup, then fix it. Hooks fail silently by design, so a broken install looks like a working one.
   - `scripts/doctor.sh` is read-only. It checks:
