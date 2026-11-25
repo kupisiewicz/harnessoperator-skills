@@ -192,7 +192,7 @@ inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
 check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ] && [ -f "$C/commands/decision.md" ] && [ -f "$C/commands/brief.md" ]'
-check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ] && [ -x "$(dirname "$IH")/decision-log.sh" ]'
+check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ] && [ -x "$(dirname "$IH")/decision-log.sh" ] && [ -x "$(dirname "$IH")/lesson-mine.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
 done
@@ -327,6 +327,34 @@ check "lesson-search: no match says so" 'grep -qF "none: nothing written down me
 ( cd "$lp" && HOME="$lh" "$SH" "$LS" >/dev/null 2>&1 ); rc=$?
 check "lesson-search: no keyword -> usage, rc!=0" '[ $rc -ne 0 ]'
 check "/lesson runs the installed script, never strengthens the user's words, asks on conflict" "grep -qF 'hooks/harnessoperator/lesson-search.sh' \"$CMDS/lesson.md\" && grep -qi 'never strengthen' \"$CMDS/lesson.md\" && grep -qi 'contradicting rule' \"$CMDS/lesson.md\""
+
+# --- lesson mining (/lesson mine's script) -------------------------------------------
+LM="$REPO/scripts/lesson-mine.sh"
+check "lesson-mine.sh: executable, bash -n" '[ -x "$LM" ] && bash -n "$LM"'
+ltd="$lh/.claude/projects/$(printf '%s' "$lp" | sed 's#[^A-Za-z0-9]#-#g')"; mkdir -p "$ltd"
+la() { jq -nc --arg t "$1" '{type:"assistant",sessionId:"sess1234x",message:{content:[{type:"text",text:$t}]}}'; }
+lu() { jq -nc --arg t "$1" --arg ts "$2" '{type:"user",sessionId:"sess1234x",timestamp:$ts,message:{content:$t}}'; }
+{ la "I installed it with npm."; lu "No, I told you to use bun in this repo." "2026-11-20T10:00:00Z"
+  la "Shall I deploy it now?"; lu "No need" "2026-11-20T10:05:00Z"
+  lu "Stop" "2026-11-20T10:06:00Z"
+  jq -nc '{type:"user",isMeta:true,message:{content:"Stop hook feedback: never claim that"}}'
+  jq -nc '{type:"user",message:{content:[{type:"tool_result",content:"you forgot again! never"}]}}'
+  jq -nc '{type:"user",origin:{kind:"task-notification"},message:{content:"agent says: never do X, I told you"}}'
+  lu "Task (from the session that started this one): never merge, I told you" "2026-11-20T10:07:00Z"
+  jq -nc '{type:"user",isSidechain:true,message:{content:"No, I told you already"}}'
+  echo 'not json'; } > "$ltd/s1.jsonl"
+lu "Why did you delete it? I told you to keep it." "2020-01-01T00:00:00Z" > "$ltd/s0.jsonl"; touch -t 202001010000 "$ltd/s0.jsonl"
+mout=$(cd "$lp" && HOME="$lh" "$SH" "$LM" 2>&1); rc=$?
+check "lesson-mine: finds the typed correction, with the reply it answered" '[ $rc -eq 0 ] && grep -qF "USER: No, I told you to use bun" <<<"$mout" && grep -qF "AFTER: …I installed it with npm." <<<"$mout" && grep -qF "sess1234" <<<"$mout"'
+check "lesson-mine: exactly one candidate (no answers, orders, hook notes, tool output, agents, forwarded tasks, sidechains)" 'grep -c "USER:" <<<"$mout" | grep -qx 1'
+check "lesson-mine: transcripts older than the window are skipped" '! grep -qF "Why did you delete" <<<"$mout" && grep -qF "Scanned 1 transcripts from the last 30 days" <<<"$mout"'
+mout=$(cd "$lp" && HOME="$lh" "$SH" "$LM" 100000 2>&1)
+check "lesson-mine: a wider window finds the older one, newest first" 'grep -qF "Why did you delete" <<<"$mout" && [ "$(grep -m1 "USER:" <<<"$mout" | grep -c bun)" = 1 ]'
+( cd "$lp" && HOME="$lh" "$SH" "$LM" lots >/dev/null 2>&1 ); rc=$?
+check "lesson-mine: bad argument -> usage, rc!=0" '[ $rc -ne 0 ]'
+mout=$(cd "$sandbox" && HOME="$lh" "$SH" "$LM" 2>&1); rc=$?
+check "lesson-mine: no transcripts here -> says so, suggests all, rc=0" '[ $rc -eq 0 ] && grep -qF "lesson-mine.sh 30 all" <<<"$mout"'
+check "/lesson mine runs the installed script and files nothing without the user's pick" "grep -qF 'hooks/harnessoperator/lesson-mine.sh' \"$CMDS/lesson.md\" && grep -qi 'never file a mined lesson without the user' \"$CMDS/lesson.md\""
 
 # --- decision log (/decision's script + the SessionStart pointer) -------------------------
 DL="$REPO/scripts/decision-log.sh"

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **`/lesson mine [days] [all]`**: finds the corrections nobody filed. `scripts/lesson-mine.sh` reads this project's session transcripts (or every project's with `all`, last 30 days by default) and lists the typed messages that read like corrections, newest first, each with the end of the reply it answered. Hook notes, tool output, agent and scheduled-task messages, sidechains, forwarded tasks, pasted text, bare "stop" and a "no" answering a question are left out. These filters were tuned on real transcripts. The model groups repeats, drops what an existing rule covers, and files only the lessons the user picks.
+
 - **Evidence gate**: "fixed" before a noun ("a fixed version", "fixed width", "a fixed mix") means pinned or constant, not repaired, and is no longer read as a claim that a fix works. "The bug is fixed" still needs a check. This was the gate's third false alarm in live use, and it is now a regression test.
 
 - **Project picking at session start**: a new session in a non-repo folder that holds two or more git repos is told it is in a workspace, not a project. Before the first edit or command, it settles which project the task is in: from the user's message, or by asking in one line with the five most recently active repos offered. It then works from inside that project, so the project's `CLAUDE.md` applies and its checkpoints are filed there. A plain non-repo project, with fewer than two repos below it, is not affected.
