@@ -75,6 +75,7 @@ own entries, and backs up every file it changes first
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
 | `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/compact-check`, not a hook) |
 | `scripts/lesson-search.sh` | `~/.claude/hooks/harnessoperator/lesson-search.sh` (run by `/lesson`, not a hook) |
+| `scripts/lesson-mine.sh` | `~/.claude/hooks/harnessoperator/lesson-mine.sh` (run by `/lesson mine`, not a hook) |
 | `scripts/decision-log.sh` | `~/.claude/hooks/harnessoperator/decision-log.sh` (run by `/decision`, `/checkpoint` and `/summary`, not a hook) |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
@@ -241,6 +242,13 @@ sessions follow:
 - **Asks only when it should.** Memory and the global file are written straight away,
   with a backup. A project `CLAUDE.md` that others share, or a rule that reverses an
   existing one, waits for your yes.
+- **Mines the corrections you never filed.** `/lesson mine [days] [all]` reads past
+  session transcripts (this project's, last 30 days by default) and lists the typed
+  messages that read like corrections ("No, I told you…", "why did you…", "never…"),
+  each with the end of the reply it answered. Answers to questions, bare orders like
+  "stop", hook notes, agent messages and pasted text are left out. The model groups the
+  repeats, drops anything an existing rule already covers, and shows a numbered list.
+  It files only the ones you pick.
 
 ### `/decision`: settled once, not argued again
 
@@ -469,7 +477,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-176 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+184 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See

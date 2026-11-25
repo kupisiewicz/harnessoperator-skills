@@ -1,11 +1,27 @@
 ---
 description: Turn a correction into one durable rule, with its why, filed in the right place (global CLAUDE.md, project CLAUDE.md or memory), after checking for duplicates and conflicts
-argument-hint: "[the correction, e.g. 'never merge without asking' — empty = the last one in this conversation]"
+argument-hint: "[the correction, e.g. 'never merge without asking' — empty = the last one here — or 'mine [days] [all]' to find corrections in past sessions]"
 ---
 
 Turn a correction into a rule that every future session follows, written down once and in the right place. Correction: $ARGUMENTS
 
 If it's empty, take the most recent thing the user corrected, insisted on or confirmed in this conversation. Quote their words. If nothing fits, ask in one line what the lesson is and stop.
+
+## `/lesson mine [days] [all]`: find the corrections nobody filed
+
+If the arguments start with `mine`, don't write a rule yet. Find the corrections in past sessions first:
+
+`bash ~/.claude/hooks/harnessoperator/lesson-mine.sh [days] [all]`
+
+It reads this project's session transcripts from the last 30 days by default, or every project's with `all`. It prints the typed messages that read like corrections, newest first. Each comes with the end of the reply it answered (`AFTER:`).
+
+1. **Judge each candidate.** Keep a message only if it corrects how the model worked: it did something the user didn't want, or forgot a standing preference. Drop new tasks, one-off orders ("stop", "no need to deploy now"), answers to a question, and task briefs written by another session or agent. When unsure, drop it.
+2. **Group them.** Corrections that say the same thing are one lesson, and a repeat is the strongest signal. For each group keep the user's clearest wording, the count, and the dates.
+3. **Drop what's already a rule.** Run `lesson-search.sh` (step 2 below) with each group's keywords. If a rule already covers it, say so, quoting that rule's `file:line`. When the correction came after the rule was written, offer to strengthen the rule instead of adding a new one.
+4. **Present a numbered list,** most repeated first. For each: the proposed rule in the user's words, ×count, the dates, one short quote, and the home it would go to. Say how many candidates you dropped, and why in one line.
+5. **Wait.** File only the ones the user picks ("1, 3"), each one through steps 1–4 below. Never file a mined lesson without the user's pick: the user hasn't confirmed it yet.
+
+Transcripts can quote secrets. Never print a secret value from them, and keep quotes to the few words the lesson needs.
 
 ## 1. State it
 
