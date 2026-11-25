@@ -7,7 +7,7 @@ This is the long-form companion to the [README](../README.md): what every skill 
 eight situations where they change the outcome, and why they are worth running if you
 operate AI coding agents all day. Install and configuration details stay in the README.
 
-8 commands · 2 hooks · 174 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
+8 commands · 2 hooks · 176 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
 
 ---
 
@@ -349,7 +349,7 @@ over, with files, hooks and checks instead of reminders.
 - **Tuned on real sessions.** The evidence gate was replayed over 408 real turns before it
   shipped. Each false alarm it raised in live use became a regression test.
 - **No dependencies.** bash, jq and git. It runs on macOS's stock bash 3.2 and on Linux,
-  with 174 black-box tests on both in CI. Installing twice changes nothing, and uninstall
+  with 176 black-box tests on both in CI. Installing twice changes nothing, and uninstall
   removes it all.
 
 ## Install

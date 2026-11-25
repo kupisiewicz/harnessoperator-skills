@@ -418,6 +418,11 @@ w() { jq -nc --arg p "$1" '{type:"assistant",message:{content:[{type:"tool_use",
 check "gate: scratchpad and /tmp edits after the test run do not reset it" '[ -z "$(gate "$eg/r12.jsonl")" ]'
 { u "x"; tc Bash "bash tests/run.sh"; w /repo/tmp/fix.sh; say "All 169 tests pass."; } > "$eg/r13.jsonl"
 check "gate: a project file in a folder named tmp still resets it" 'blocks "$(gate "$eg/r13.jsonl")"'
+# The third live false alarm: "a fixed version" means pinned, not repaired.
+{ u "x"; tc Edit ""; say "Tag it, so others can install a fixed version. The fixed-width table and a fixed mix stay."; } > "$eg/r14.jsonl"
+check "gate: 'fixed' before a noun (a fixed version) is not a fix claim" '[ -z "$(gate "$eg/r14.jsonl")" ]'
+{ u "x"; tc Edit ""; say "Pinned a fixed version, and the login bug is fixed."; } > "$eg/r15.jsonl"
+check "gate: a real 'is fixed' beside a fixed version still blocks" 'blocks "$(gate "$eg/r15.jsonl")"'
 echo 'not json' | HOME="$sandbox" "$SH" "$GATE" >/dev/null 2>&1; rc=$?
 check "gate: garbage stdin / missing transcript -> rc=0, silent" '[ $rc -eq 0 ] && [ -z "$(gate /nonexistent.jsonl)" ]'
 

@@ -87,7 +87,13 @@ need "a push or merge" '\b(pushed|merged|pr (is )?(opened|created|merged))\b' \
   '\bgit (push|log|merge)\b|\bgh (pr|api)\b' "Show it with git log, gh pr view, or the push output." \
   '\b(pr|prs|pull request|branch|main|master|origin|remote|commit|github|#[0-9]+)\b'
 # Bare "confirmed" and "resolved" are left out: they mostly describe data, not a fix.
-need "a fix that works" '\b(fixed|works now|now works|is working|verified)\b' \
+# "Fixed" before a noun means pinned or constant ("a fixed version", "fixed width"), not
+# repaired, so those uses are dropped for this check only. The prefix assignment scopes
+# the trimmed prose to this one call.
+fix_prose=$(printf '%s\n' "$prose" | sed -E \
+  -e 's/(^|[^A-Za-z])([Aa]n?|[Tt]he) [Ff]ixed([^A-Za-z]|$)/\1\3/g' \
+  -e 's/[Ff]ixed[- ](price|cost|rate|size|width|height|length|number|count|set|list|mix|order|point|position|version|release|schedule|interval|amount|format|layout|header|footer|term|fee|budget|seed|window)//g')
+prose="$fix_prose" need "a fix that works" '\b(fixed|works now|now works|is working|verified)\b' \
   "^(Bash|mcp__[^	]*(shell|run|exec|browser|navigate|screenshot|read_page|javascript|computer))" \
   "Run something after the last edit that exercises the fix (test, request, page) and quote it."
 need "a successful build" '\b(builds? (cleanly|fine|successfully)|compiles?( cleanly)?|build (passes|succeeded|is green))\b' \
