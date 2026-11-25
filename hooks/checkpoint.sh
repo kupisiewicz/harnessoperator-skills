@@ -144,12 +144,17 @@ case "$event" in
       # This session's own newest checkpoint, not whichever session compacted last. Search
       # every project folder: an umbrella session's summaries live under the project it
       # worked on, and session ids are unique, so this cannot pick up a stranger's file.
+      # SessionStart can fire before PostCompact has written the summary, so the
+      # transcript PreCompact saved is the fallback way to find this session's folder.
       own=$(ls -t "$base"/*/*_"$session".md 2>/dev/null | head -1)
-      [ -n "$own" ] && dir=$(dirname "$own") && manual=$( [ -f "$dir/CHECKPOINT.md" ] && echo "$dir/CHECKPOINT.md")
-      own=${own:-$( [ -f "$dir/latest.md" ] && echo "$dir/latest.md")}
-      [ -z "$own$manual" ] && exit 0
-      raw="$dir/${session}.transcript.jsonl"; [ -f "$raw" ] || raw=none
-      ctx="Context was just compacted. Checkpoint for this session: ${own:-none}."
+      raw=$(ls -t "$base"/*/"$session".transcript.jsonl 2>/dev/null | head -1)
+      if [ -n "$own" ]; then dir=$(dirname "$own"); elif [ -n "$raw" ]; then dir=$(dirname "$raw"); fi
+      manual=$( [ -f "$dir/CHECKPOINT.md" ] && echo "$dir/CHECKPOINT.md")
+      # latest.md is whichever session compacted last: only claim it if it is ours.
+      [ -z "$own" ] && grep -qF "session: $session " "$dir/latest.md" 2>/dev/null && own="$dir/latest.md"
+      [ -z "$own$manual$raw" ] && exit 0
+      raw=${raw:-none}
+      ctx="Context was just compacted. Checkpoint for this session: ${own:-"not written yet; it will be $dir/latest.md"}."
       [ -n "$manual" ] && ctx="$ctx A manual /checkpoint file also exists: $manual. Read both; it may be newer or more structured."
       ctx="$ctx Full pre-compact transcript: $raw. Before continuing: re-verify live state (git status, branches, PRs, servers) against the checkpoint; if a detail is missing from the summary, grep the transcript instead of guessing."
       dec=$(decisions "$dir"); [ -n "$dec" ] && ctx="$ctx $dec"
