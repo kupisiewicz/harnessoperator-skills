@@ -116,7 +116,7 @@ dead=$(jq -r '.hooks // {} | to_entries[] | .value[]?.hooks[]? | .command // emp
 while IFS= read -r c; do
   set -f; set -- $c; set +f
   case "$1" in (bash|sh|zsh|node|bun|python|python3|ruby|perl) shift ;; esac
-  p=${1:-}; case "$p" in ("~/"*) p="$HOME/${p#\~/}" ;; ('$HOME/'*) p="$HOME/${p#\$HOME/}" ;; esac
+  p=${1:-}; case "$p" in (\~/*) p="$HOME/${p#\~/}" ;; ('$HOME/'*) p="$HOME/${p#\$HOME/}" ;; esac
   case "$p" in (/*) [ -e "$p" ] || printf '%s\n' "$c" ;; esac
 done)
 while IFS= read -r c; do
