@@ -50,6 +50,7 @@ while IFS= read -r p; do
   # Relative patterns are from the project root; a folder covers what is inside it.
   # The pattern is unquoted on purpose: it is a glob.
   case "$p" in (/*) t=$abs ;; (*) t=$rel ;; esac
+  # shellcheck disable=SC2254 # the pattern is a glob from the brief, matched as one
   case "$t" in ($p|$p/*) hit=$p; break ;; esac
 done <<<"$pats"
 [ -n "$hit" ] || exit 0

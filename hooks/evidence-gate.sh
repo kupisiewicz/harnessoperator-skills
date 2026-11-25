@@ -120,6 +120,7 @@ if [ "$last_edit" -gt 0 ] && printf '%s\n' "$prose" |
       for c in $(printf '%s\n' "$item" | grep -oE '`[^`]+`' | tr -d '`' | tr ' ' '\037'); do
         # A command's key is its program and its first argument that isn't a flag, after
         # any VAR=value prefix: "SH=/bin/bash bash tests/x.sh -v" -> bash + tests/x.sh.
+        # shellcheck disable=SC2046 # split on purpose; globbing is off (set -f)
         set -- $(printf '%s' "$c" | tr '\037' ' ')
         while [ $# -gt 0 ] && case "$1" in (*=*) true ;; (*) false ;; esac; do shift; done
         [ $# -gt 0 ] && printf '%s' "$1" | grep -qE "$runner" || continue
