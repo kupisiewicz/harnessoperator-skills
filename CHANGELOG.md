@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **`/doctor` and `/cure`**: find what is broken in the setup, then fix it. Hooks fail silently by design, so a broken install looks like a working one.
+  - `scripts/doctor.sh` is read-only. It checks:
+    - jq is present and `settings.json` is valid JSON;
+    - each hook is present, executable, the same as the checkout and wired exactly once with the right matcher;
+    - a smoke test of each hook, the commands and the compact instructions;
+    - a gate switched off in settings, and hooks that point at a missing script;
+    - this project's last checkpoint (INCOMPLETE?) and brief (weeks old?).
+  - Each finding carries its fix, labelled safe, ask or manual.
+  - `scripts/cure.sh` holds the fixes: reinstall, chmod, unset-env, remove-hook, restore-settings and archive-brief. Each one is narrow and backs up what it changes, and it writes `settings.json` only if the result is valid JSON.
+  - `/cure` runs the doctor fresh. It applies the safe fixes, asks once for the ask ones (`/cure all` skips the question) and spells out the manual ones. Then it runs the doctor again and reports before → after.
+  - `install.sh` now records its checkout in `~/.claude/hooks/harnessoperator/source`, so the doctor can compare against it and the cure can reinstall from it.
+
 - **The brief is enforced, not just written.** A new `PreToolUse` hook, `hooks/brief-guard.sh`, refuses Edit, Write, MultiEdit, NotebookEdit and lean-ctx patches to any path or glob written in backticks under the brief's "Don't touch", and tells the model to ask before changing the brief. When a turn that changed code calls the task done, the evidence gate now checks that every command in backticks under "Done means" ran after the last edit, and names the items that didn't. Both bind only a session whose transcript names the brief, so a brief left from an old task never blocks unrelated work. Prose items stay advisory, and shell writes are not checked. `HO_BRIEF_GUARD=off` disables the guard.
 
 - **`/lesson mine`**: a correction copied into forked or resumed sessions is listed once, not once per copy. The copies keep their timestamp and session id, which is what the dedupe matches on. On the first real run, one message showed up 17 times; across 615 transcripts the hits went from 113 to 71.

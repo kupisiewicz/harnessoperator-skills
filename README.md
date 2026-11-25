@@ -13,6 +13,7 @@ build their own. Part of the **Harness Operator** project. It targets
 - **The same correction gets typed again next week.** That's `/lesson`.
 - **A settled choice gets argued again in the next session.** That's `/decision`.
 - **The model builds the wrong thing, or the right thing with the wrong priorities.** That's `/brief`.
+- **A hook breaks silently, so a feature is off and nobody knows.** That's `/doctor` and `/cure`.
 
 | Skill | What it does | How it runs |
 |---|---|---|
@@ -25,6 +26,8 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/lesson`** | Turns a correction into one rule, with its why and how to apply it. It checks every existing rule for a duplicate or a conflict, then files the rule once: in global or project `CLAUDE.md`, or in memory. | You type it |
 | **`/decision`** | Keeps a per-project, append-only `DECISIONS.md`: what was decided, by whom, why, and what was rejected. A later decision supersedes an earlier one but never rewrites it. Every new session is told how many decisions are in force. `/checkpoint` adds its decisions automatically. | You type it (and `/checkpoint`) |
 | **`/brief`** | Before work starts, turns a request into a short brief you confirm in one read: the task in your words, your focus (`/brief UI is the most important part`), the goal, checkable "done means", scope, what not to touch, and its assumptions. A compacted session is pointed back at it. | You type it |
+| **`/doctor`** | Checks that the setup works: jq, `settings.json`, each hook installed, current, wired once and passing a smoke test, the commands and compact instructions, gates switched off, hooks pointing at missing scripts, and this project's checkpoint and brief. Each problem comes with its fix. Read-only. | You type it |
+| **`/cure`** | Fixes what `/doctor` finds. It applies the safe fixes, asks once for the rest (`/cure all` skips the question) and spells out the manual ones. Every fix is a tested, backed-up step in `cure.sh`. Then it checks again and shows before → after. | You type it, after `/doctor` |
 | **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
 
 **New here?** [docs/GUIDE.md](docs/GUIDE.md) explains every skill, walks through eight
@@ -69,7 +72,7 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md`, `commands/decision.md`, `commands/brief.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md`, `commands/decision.md`, `commands/brief.md`, `commands/doctor.md`, `commands/cure.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `hooks/evidence-gate.sh` | `~/.claude/hooks/harnessoperator/evidence-gate.sh` |
 | `hooks/brief-guard.sh` | `~/.claude/hooks/harnessoperator/brief-guard.sh` |
@@ -78,6 +81,7 @@ own entries, and backs up every file it changes first
 | `scripts/lesson-search.sh` | `~/.claude/hooks/harnessoperator/lesson-search.sh` (run by `/lesson`, not a hook) |
 | `scripts/lesson-mine.sh` | `~/.claude/hooks/harnessoperator/lesson-mine.sh` (run by `/lesson mine`, not a hook) |
 | `scripts/decision-log.sh` | `~/.claude/hooks/harnessoperator/decision-log.sh` (run by `/decision`, `/checkpoint` and `/summary`, not a hook) |
+| `scripts/doctor.sh`, `scripts/cure.sh` | `~/.claude/hooks/harnessoperator/` (run by `/doctor` and `/cure`, not hooks), plus a `source` file naming the checkout it was installed from |
 | Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
@@ -472,6 +476,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 
 | Symptom | Check |
 |---|---|
+| Anything seems off, or nothing happens | Run `/doctor`. It checks the install, wiring and settings, and `/cure` fixes what it finds. |
 | Nothing appears in `~/.claude/checkpoints/` after a compact | Hooks load at session start, so start a new session after installing. Confirm the entries with `jq .hooks ~/.claude/settings.json`. |
 | `latest.md` says `EMPTY SUMMARY` | Your Claude Code version passes no summary to `PostCompact`. The file lists the keys it did receive. Please open an issue with them. |
 | `latest.md` says `INCOMPLETE` | The model skipped a required section. The full transcript is beside it, so grep there for the missing details. |
@@ -484,7 +489,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-200 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+219 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See

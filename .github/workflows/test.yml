@@ -26,4 +26,4 @@ jobs:
         run: SH=/bin/bash bash tests/test-checkpoint.sh
       - name: ShellCheck
         if: runner.os == 'Linux'
-        run: shellcheck -S warning hooks/checkpoint.sh hooks/evidence-gate.sh hooks/brief-guard.sh install.sh uninstall.sh
+        run: shellcheck -S warning hooks/checkpoint.sh hooks/evidence-gate.sh hooks/brief-guard.sh scripts/doctor.sh scripts/cure.sh install.sh uninstall.sh

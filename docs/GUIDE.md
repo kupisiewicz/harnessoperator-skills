@@ -7,7 +7,7 @@ This is the long-form companion to the [README](../README.md): what every skill 
 eight situations where they change the outcome, and why they are worth running if you
 operate AI coding agents all day. Install and configuration details stay in the README.
 
-8 commands · 3 hooks · 200 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
+10 commands · 3 hooks · 219 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
 
 ---
 
@@ -27,6 +27,7 @@ by hand, and the skill that takes each one over.
 | A choice settled three sessions ago comes back as a fresh question. | `/decision` | An append-only log, named at every session start. |
 | You staff subagents by writing a paragraph each time. | `/swarm` | One line, with a fixed model mix and a reviewer. |
 | Instructions that load at every start pile up, contradict each other and go stale. | `/context-audit` | What loads is measured, its faults are proven, and fixes are applied only on your approval. |
+| A hook breaks silently and nobody notices for weeks. | `/doctor` · `/cure` | Every way the setup breaks is checked in one command, and each fix is a tested, backed-up step. |
 
 ## Where they fit: one session, start to resume
 
@@ -38,6 +39,7 @@ by hand, and the skill that takes each one over.
 | **Freeze** | `/checkpoint` · `/compact-check` | A verified record, then a three-line answer: compact now, and is it safe? |
 | **Survive** | compact hook | The summary is saved and checked, and the raw transcript is kept. |
 | **Continue** | `/summary` | Done, in progress and not started, checked against live git state. |
+| **Maintain** | `/doctor` · `/cure` | Find what is broken in the setup, then fix it safely and check again. |
 
 The **evidence gate** runs at every stop of every turn. No claim of "passes", "live" or
 "merged" gets through without a check run after the last code edit.
@@ -214,6 +216,33 @@ index, hook output, skill listings, MCP instructions.
 **What's different:** these files are read at the start of every session. Cleaning them
 up improves every later session, not just one.
 
+### Maintain: find what's broken, then fix it
+
+#### `/doctor` then `/cure`
+
+Hooks fail silently by design, since a hook must never break a session. That means a
+broken install looks exactly like a working one. `/doctor` checks every way this setup
+breaks and only reads:
+- jq is present and `settings.json` is valid JSON;
+- each hook is installed, executable, current and wired exactly once;
+- each hook passes a smoke test, and the commands and compact instructions are in place;
+- no gate is switched off, and no other hook points at a script that's gone;
+- this project's last checkpoint is complete and its brief isn't weeks old.
+
+Each problem comes with its fix, labelled **safe**, **ask** or **manual**.
+
+`/cure` runs the checks again and applies the fixes:
+- **safe** ones without asking;
+- **ask** ones after one yes (`/cure all` means yes to all of them);
+- **manual** ones it spells out for you instead.
+
+Every fix is one tested operation in `cure.sh` that backs up what it changes, never a hand
+edit of your settings. `/cure` then runs `/doctor` again and shows each problem
+before → after.
+
+**What's different:** "is it even running?" gets an answer in one command, and the repair
+can't make things worse. A fix only counts once the second check says OK.
+
 ---
 
 ## Eight use cases where they make the biggest difference
@@ -354,7 +383,7 @@ over, with files, hooks and checks instead of reminders.
 - **Tuned on real sessions.** The evidence gate was replayed over 408 real turns before it
   shipped. Each false alarm it raised in live use became a regression test.
 - **No dependencies.** bash, jq and git. It runs on macOS's stock bash 3.2 and on Linux,
-  with 200 black-box tests on both in CI. Installing twice changes nothing, and uninstall
+  with 219 black-box tests on both in CI. Installing twice changes nothing, and uninstall
   removes it all.
 
 ## Install
