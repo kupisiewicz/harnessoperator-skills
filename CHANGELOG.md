@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix: after a compact, a session could be pointed at another session's checkpoint.** Claude Code can fire SessionStart before PostCompact has written the summary. In an umbrella folder the hook then fell back to the umbrella's `latest.md`, which belonged to whichever session compacted last. It now finds the session's folder from the transcript PreCompact saved, claims `latest.md` only when its `session:` line matches, and says where the summary will land. Found live; now a regression test.
+
 - **`/decision`**: a per-project, append-only `DECISIONS.md` beside the checkpoints. Each entry records what was decided, by whom, why, what was rejected, its scope and its status; a later entry supersedes an earlier one without rewriting it. `scripts/decision-log.sh` handles the path, the next ID and the active list. `/checkpoint` adds its "Decisions made" items, `/summary` lists the active ones, and every new or freshly compacted session is told how many decisions are in force and where.
 
 - **Evidence gate**: "live" for a local tool means installed. When the reply talks about installing, an install script or a `cmp`/`diff` against the installed copy now counts as evidence. A claim that a URL is live still needs a request. A turn that answers the gate's own feedback is never nudged again. Both came from the gate's first live false alarm, and both are regression tests.

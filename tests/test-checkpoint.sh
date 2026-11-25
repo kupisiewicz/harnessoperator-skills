@@ -115,6 +115,14 @@ check "umbrella: transcript saved under busiest project (repo root)" '[ -f "$san
 check "umbrella: summary saved beside it, not in umbrella folder" '[ -f "$sandbox/.claude/checkpoints/$bslug/latest.md" ] && [ ! -d "$sandbox/.claude/checkpoints/$uslug" ]'
 out=$(uev SessionStart u1 "$ut" | run)
 check "umbrella: compact SessionStart finds own checkpoint in project folder" 'ctx "$out" | grep -qF -- "$bslug/" && ctx "$out" | grep -qF "u1.transcript.jsonl"'
+# Real order seen live: SessionStart compact fires before PostCompact. The umbrella
+# folder holds a stranger's latest.md, which must never be named as this session's.
+mkdir -p "$sandbox/.claude/checkpoints/$uslug"
+printf '# Checkpoint\nsession: stranger · trigger: manual\n' > "$sandbox/.claude/checkpoints/$uslug/latest.md"
+uev PreCompact u3 "$ut" | run; out=$(uev SessionStart u3 "$ut" | run)
+check "umbrella: SessionStart before PostCompact names own folder + transcript" 'ctx "$out" | grep -qF -- "$bslug/u3.transcript.jsonl" && ctx "$out" | grep -qF "not written yet"'
+check "umbrella: never claims another session's latest.md" '! ctx "$out" | grep -qF -- "$uslug/latest.md"'
+rm -r "$sandbox/.claude/checkpoints/$uslug"
 out=$(uev SessionStart u2 "$ut" | jq -c '.source="startup"' | run)
 check "umbrella: startup lists project checkpoints inside it" 'ctx "$out" | grep -qF -- "$bslug/latest.md"'
 # Hidden folders: .claude (config, no repo) is touched most but must not win; .wt is a
