@@ -115,6 +115,10 @@ check "umbrella: transcript saved under busiest project (repo root)" '[ -f "$san
 check "umbrella: summary saved beside it, not in umbrella folder" '[ -f "$sandbox/.claude/checkpoints/$bslug/latest.md" ] && [ ! -d "$sandbox/.claude/checkpoints/$uslug" ]'
 out=$(uev SessionStart u1 "$ut" | run)
 check "umbrella: compact SessionStart finds own checkpoint in project folder" 'ctx "$out" | grep -qF -- "$bslug/" && ctx "$out" | grep -qF "u1.transcript.jsonl"'
+check "compact SessionStart: no brief, no brief line" '! ctx "$out" | grep -qF "BRIEF.md"'
+printf '# Brief\n' > "$sandbox/.claude/checkpoints/$bslug/BRIEF.md"; out=$(uev SessionStart u1 "$ut" | run)
+check "compact SessionStart: names the project's /brief file with its age" 'ctx "$out" | grep -qF -- "$bslug/BRIEF.md (0h old)"'
+rm "$sandbox/.claude/checkpoints/$bslug/BRIEF.md"
 # Real order seen live: SessionStart compact fires before PostCompact. The umbrella
 # folder holds a stranger's latest.md, which must never be named as this session's.
 mkdir -p "$sandbox/.claude/checkpoints/$uslug"
@@ -181,7 +185,7 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ] && [ -f "$C/commands/decision.md" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ] && [ -f "$C/commands/decision.md" ] && [ -f "$C/commands/brief.md" ]'
 check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ] && [ -x "$(dirname "$IH")/decision-log.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
@@ -211,7 +215,7 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ] && [ ! -e "$C/commands/decision.md" ]'
+check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ] && [ ! -e "$C/commands/decision.md" ] && [ ! -e "$C/commands/brief.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
 
