@@ -158,6 +158,9 @@ case "$event" in
       [ -n "$manual" ] && ctx="$ctx A manual /checkpoint file also exists: $manual. Read both; it may be newer or more structured."
       ctx="$ctx Full pre-compact transcript: $raw. Before continuing: re-verify live state (git status, branches, PRs, servers) against the checkpoint; if a detail is missing from the summary, grep the transcript instead of guessing."
       dec=$(decisions "$dir"); [ -n "$dec" ] && ctx="$ctx $dec"
+      # A summary paraphrases the task; the /brief file keeps the user's own words and the
+      # agreed "Done means". The age lets the model tell this task's brief from an old one.
+      [ -f "$dir/BRIEF.md" ] && ctx="$ctx Task brief for this project: $dir/BRIEF.md ($(age "$dir/BRIEF.md") old). If it is this session's task, re-read it: it holds the focus and what done means."
     fi
     jq -n --arg ctx "$ctx" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$ctx}}'
     ;;

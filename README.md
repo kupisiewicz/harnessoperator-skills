@@ -12,6 +12,7 @@ build their own. Part of the **Harness Operator** project. It targets
 - **"Tests pass" and "deployed" get said without being checked.** That's the evidence gate.
 - **The same correction gets typed again next week.** That's `/lesson`.
 - **A settled choice gets argued again in the next session.** That's `/decision`.
+- **The model builds the wrong thing, or the right thing with the wrong priorities.** That's `/brief`.
 
 | Skill | What it does | How it runs |
 |---|---|---|
@@ -23,6 +24,7 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/compact-check`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
 | **`/lesson`** | Turns a correction into one rule, with its why and how to apply it. It checks every existing rule for a duplicate or a conflict, then files the rule once: in global or project `CLAUDE.md`, or in memory. | You type it |
 | **`/decision`** | Keeps a per-project, append-only `DECISIONS.md`: what was decided, by whom, why, and what was rejected. A later decision supersedes an earlier one but never rewrites it. Every new session is told how many decisions are in force. `/checkpoint` adds its decisions automatically. | You type it (and `/checkpoint`) |
+| **`/brief`** | Before work starts, turns a request into a short brief you confirm in one read: the task in your words, your focus (`/brief UI is the most important part`), the goal, checkable "done means", scope, what not to touch, and its assumptions. A compacted session is pointed back at it. | You type it |
 | **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
 
 ---
@@ -64,7 +66,7 @@ own entries, and backs up every file it changes first
 
 | Installs | To |
 |---|---|
-| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md`, `commands/decision.md` | `~/.claude/commands/` |
+| `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md`, `commands/decision.md`, `commands/brief.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `hooks/evidence-gate.sh` | `~/.claude/hooks/harnessoperator/evidence-gate.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
@@ -263,6 +265,31 @@ them in `~/.claude/checkpoints/<project>/DECISIONS.md`:
   "N settled decisions for this project: <path>". `/summary` lists them, and
   `/checkpoint` adds its own "Decisions made" items to the log.
 
+### `/brief`: agree on the task before the work
+
+Most wasted work starts as a misread request, or a right request with the wrong
+priorities. `/brief` reads just enough of the code to name real files and checks, then
+writes the task back as a brief for you to confirm or correct before anything is built:
+
+```
+/brief                                  brief the request you just made
+/brief UI is the most important part    the same, with your focus
+/brief add CSV export; speed over polish  task and focus in one line
+```
+
+- **Your words, quoted.** The task and the focus are kept verbatim, and the brief never
+  turns the model's preference into your requirement.
+- **A focus changes priority, not scope.** It says where effort goes first and what is
+  checked hardest. The rest is still done to the normal standard.
+- **"Done means" is checkable:** a command, a URL, a test, a screenshot. It's what the
+  task is checked against before it's called done.
+- **Out of scope, don't touch, assumptions** are written down, so nothing is silently
+  added and every guess is yours to veto.
+- **It waits for "Go".** Running `/brief <focus>` again updates the current brief.
+- **It survives compaction.** It's saved as `~/.claude/checkpoints/<project>/BRIEF.md`
+  (earlier ones are archived). A compacted session is pointed back at it, and
+  `/checkpoint` takes its Goal from it.
+
 ### The evidence gate: claims need a check from this turn
 
 A rule in `CLAUDE.md` that says "verify before you claim" is only a request. This
@@ -342,6 +369,7 @@ Turn it off for one session with `HO_EVIDENCE_GATE=off`.
 ├── CHECKPOINT.md                     ← /checkpoint (structured, verified)
 ├── CHECKPOINT-2026-03-01_120000.md   ← each earlier /checkpoint, archived on rewrite
 ├── DECISIONS.md                      ← /decision log, append-only (never pruned)
+├── BRIEF.md                          ← /brief (the task as confirmed; earlier ones BRIEF-<date>.md)
 ├── latest.md                         ← last compact summary, scratchpad removed
 ├── 2026-03-02_184012_<session>.md    ← every compact summary, full (last 10 kept)
 └── <session>.transcript.jsonl        ← full pre-compact transcript (hardlink)
@@ -432,7 +460,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-167 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+169 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See
