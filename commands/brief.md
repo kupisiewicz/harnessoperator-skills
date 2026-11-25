@@ -45,6 +45,7 @@ What will NOT be done, so it isn't silently added or silently expected.
 
 ## Don't touch
 Files, services, data and environments that stay as they are (production, generated files, other people's work).
+Write each path or glob in backticks (`data/*.generated.js`, `config/`): a hook refuses edits to those. Prose items are advisory.
 
 ## Assumptions
 Choices made without asking. Each one is the user's to veto.
@@ -56,7 +57,7 @@ Only questions whose answer changes the work. Otherwise "None".
 Rules:
 - Use the user's words. Never strengthen them, and never turn your own preference into their requirement.
 - A focus changes priority, not scope. Work outside the focus is still done to the normal standard unless the user says otherwise.
-- Every "Done means" item must be checkable. "Works well" isn't a check; "`npm test` passes, and the form shows an error on an empty email" is.
+- Every "Done means" item must be checkable. "Works well" isn't a check; "`npm test` passes, and the form shows an error on an empty email" is. Put each command in backticks: when a turn that changed code calls the task done, the evidence gate checks that each one ran after the last edit.
 - Exact paths, commands and URLs. Keep the whole brief under about 40 lines.
 - Never put secret values in it. The folder is outside the repo, so the brief is never committed.
 

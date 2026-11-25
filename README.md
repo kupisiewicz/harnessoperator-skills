@@ -72,6 +72,7 @@ own entries, and backs up every file it changes first
 | `commands/checkpoint.md`, `commands/summary.md`, `commands/swarm.md`, `commands/context-audit.md`, `commands/compact-check.md`, `commands/lesson.md`, `commands/decision.md`, `commands/brief.md` | `~/.claude/commands/` |
 | `hooks/checkpoint.sh` | `~/.claude/hooks/harnessoperator/checkpoint.sh` |
 | `hooks/evidence-gate.sh` | `~/.claude/hooks/harnessoperator/evidence-gate.sh` |
+| `hooks/brief-guard.sh` | `~/.claude/hooks/harnessoperator/brief-guard.sh` |
 | `scripts/context-inventory.sh` | `~/.claude/hooks/harnessoperator/context-inventory.sh` (run by `/context-audit`, not a hook) |
 | `scripts/compact-check.sh` | `~/.claude/hooks/harnessoperator/compact-check.sh` (run by `/compact-check`, not a hook) |
 | `scripts/lesson-search.sh` | `~/.claude/hooks/harnessoperator/lesson-search.sh` (run by `/lesson`, not a hook) |
@@ -293,9 +294,14 @@ writes the task back as a brief for you to confirm or correct before anything is
 - **A focus changes priority, not scope.** It says where effort goes first and what is
   checked hardest. The rest is still done to the normal standard.
 - **"Done means" is checkable:** a command, a URL, a test, a screenshot. It's what the
-  task is checked against before it's called done.
+  task is checked against before it's called done. **Enforced:** when a turn that changed
+  code calls the task done, the evidence gate checks that every command written in backticks
+  under "Done means" ran after the last edit.
 - **Out of scope, don't touch, assumptions** are written down, so nothing is silently
-  added and every guess is yours to veto.
+  added and every guess is yours to veto. **Don't touch is enforced:** the brief guard (a
+  `PreToolUse` hook) refuses edits to any path or glob written in backticks there, such as
+  `data/*.generated.js` or `config/`. Prose items stay advisory. Both checks bind only a
+  session that has seen the brief, so an old one never blocks unrelated work.
 - **It waits for "Go".** Running `/brief <focus>` again updates the current brief.
 - **It survives compaction.** It's saved as `~/.claude/checkpoints/<project>/BRIEF.md`
   (earlier ones are archived). A compacted session is pointed back at it, and
@@ -425,6 +431,7 @@ Set these in the `env` block of `~/.claude/settings.json`:
 | `HO_CHECKPOINT_DAYS` | `60` | Saved transcripts older than this many days are deleted |
 | `HO_CONTEXT_WINDOW` | detected, else `200000` | Context window in tokens that `/compact-check` measures against |
 | `HO_EVIDENCE_GATE` | `on` | `off` disables the evidence gate |
+| `HO_BRIEF_GUARD` | `on` | `off` lets edits through to the brief's "Don't touch" paths |
 
 ```json
 { "env": { "HO_CHECKPOINT_KEEP": "20", "HO_CHECKPOINT_DAYS": "30" } }
@@ -477,7 +484,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-184 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+200 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See

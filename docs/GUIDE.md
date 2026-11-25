@@ -7,7 +7,7 @@ This is the long-form companion to the [README](../README.md): what every skill 
 eight situations where they change the outcome, and why they are worth running if you
 operate AI coding agents all day. Install and configuration details stay in the README.
 
-8 commands · 2 hooks · 184 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
+8 commands · 3 hooks · 200 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
 
 ---
 
@@ -115,6 +115,8 @@ touch, assumptions, and only the questions that block.
 
 - A focus decides what gets done first and checked hardest. Everything else is still done
   properly.
+- Enforced, not just written: a hook refuses edits to the paths under "Don't touch", and
+  the evidence gate holds "done" to the commands under "Done means".
 - Waits for "Go". Saved beside the checkpoints, so a compacted session is pointed back at
   it.
 
@@ -352,7 +354,7 @@ over, with files, hooks and checks instead of reminders.
 - **Tuned on real sessions.** The evidence gate was replayed over 408 real turns before it
   shipped. Each false alarm it raised in live use became a regression test.
 - **No dependencies.** bash, jq and git. It runs on macOS's stock bash 3.2 and on Linux,
-  with 184 black-box tests on both in CI. Installing twice changes nothing, and uninstall
+  with 200 black-box tests on both in CI. Installing twice changes nothing, and uninstall
   removes it all.
 
 ## Install

@@ -199,6 +199,9 @@ done
 IG="$(dirname "$IH")/evidence-gate.sh"
 gcount() { jq --arg c "$IG" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install x3: evidence gate executable, exactly one Stop entry" '[ -x "$IG" ] && [ "$(gcount Stop)" = 1 ] && [ "$(gcount SessionStart)" = 0 ]'
+IBG="$(dirname "$IH")/brief-guard.sh"
+check "install x3: brief guard executable, one PreToolUse entry matching Edit and Write" \
+  '[ -x "$IBG" ] && [ "$(jq --arg c "$IBG" "[.hooks.PreToolUse[]?.hooks[] | select(.command==\$c)] | length" "$S")" = 1 ] && jq -r --arg c "$IBG" ".hooks.PreToolUse[] | select(any(.hooks[]; .command==\$c)) | .matcher" "$S" | grep -q "^Edit|Write|"'
 for src in compact startup; do
   check "install: SessionStart matcher covers $src" \
     "jq -e --arg c \"\$IH\" '.hooks.SessionStart[] | select(.matcher as \$m | \"$src\"|test(\"^(\"+\$m+\")\$\")) | .hooks[] | select(.command==\$c)' \"\$S\" >/dev/null"
@@ -219,7 +222,7 @@ check "install: invalid settings.json -> refuses, unchanged" '[ $rc -ne 0 ] && [
 
 mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
-check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ]'
+check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ] && [ ! -e "$IBG" ] && [ "$(jq "[.hooks.PreToolUse[]?] | length" "$S")" = 0 ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
 check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ] && [ ! -e "$C/commands/decision.md" ] && [ ! -e "$C/commands/brief.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
@@ -454,6 +457,59 @@ check "gate: 'fixed' before a noun (a fixed version) is not a fix claim" '[ -z "
 check "gate: a real 'is fixed' beside a fixed version still blocks" 'blocks "$(gate "$eg/r15.jsonl")"'
 echo 'not json' | HOME="$sandbox" "$SH" "$GATE" >/dev/null 2>&1; rc=$?
 check "gate: garbage stdin / missing transcript -> rc=0, silent" '[ $rc -eq 0 ] && [ -z "$(gate /nonexistent.jsonl)" ]'
+
+# --- the brief is enforced: Don't touch (brief guard) and Done means (gate) -------------
+BG="$REPO/hooks/brief-guard.sh"
+check "brief-guard.sh: executable, bash -n" '[ -x "$BG" ] && bash -n "$BG"'
+# Inside the repo, not the temp sandbox: the gate ignores edits under /tmp and /var/folders.
+bp="$REPO/.brief-test.$$"; trap 'rm -rf "$sandbox" "$bp"' EXIT; mkdir -p "$bp/data/presets" "$bp/src"; git -C "$bp" init -q
+bproot=$(cd "$bp" && pwd -P); bd="$sandbox/.claude/checkpoints/$(printf '%s' "$bproot" | sed 's#[^A-Za-z0-9]#-#g')"
+mkdir -p "$bd"; BRIEF="$bd/BRIEF.md"
+cat > "$BRIEF" <<'EOF'
+# Brief — briefproj — 2026-11-25 14:00
+## Done means
+- [ ] `SH=/bin/bash bash tests/run.sh -v` passes
+- [ ] the form shows an error on an empty email
+## Don't touch
+- `data/presets.generated.js` (generated)
+- `config/` and anything matching `src/*.min.js`
+- production data
+## Assumptions
+- `src/app.js` is the entry point
+EOF
+bt="$sandbox/brief-t.jsonl"; printf '{"type":"user","message":{"content":"wrote %s"}}\n' "$BRIEF" > "$bt"
+gp() {   # file path [transcript] -> a PreToolUse payload for an Edit
+  jq -nc --arg f "$1" --arg t "${2:-$bt}" --arg c "$bp" '{hook_event_name:"PreToolUse",tool_name:"Edit",cwd:$c,transcript_path:$t,tool_input:{file_path:$f}}'
+}
+guard() { gp "$@" | HOME="$sandbox" "$SH" "$BG"; }   # -> hook output (empty = allowed)
+denies() { [ "$(jq -r .hookSpecificOutput.permissionDecision <<<"$1" 2>/dev/null)" = deny ]; }
+out=$(guard "$bp/data/presets.generated.js"); rc=$?
+check "brief guard: a Don't touch file -> deny, rc=0, names it" 'denies "$out" && [ $rc -eq 0 ] && jq -r .hookSpecificOutput.permissionDecisionReason <<<"$out" | grep -qF "data/presets.generated.js"'
+check "brief guard: a Don't touch folder covers files inside, even new ones" 'denies "$(guard "$bp/config/deep/new.json")"'
+check "brief guard: a glob matches (src/*.min.js)" 'denies "$(guard "$bp/src/app.min.js")"'
+check "brief guard: other files, and paths outside the section, are allowed" '[ -z "$(guard "$bp/src/app.js")" ] && [ -z "$(guard "$bp/data/presets/a.json")" ]'
+check "brief guard: a relative file_path is read from cwd" 'denies "$(guard "data/presets.generated.js")"'
+printf '{"type":"user","message":{"content":"unrelated"}}\n' > "$sandbox/other-t.jsonl"
+check "brief guard: a session that never saw the brief is not bound by it" '[ -z "$(guard "$bp/data/presets.generated.js" "$sandbox/other-t.jsonl")" ]'
+out=$(gp "$bp/config/x" | HO_BRIEF_GUARD=off HOME="$sandbox" "$SH" "$BG")
+check "brief guard: HO_BRIEF_GUARD=off -> silent" '[ -z "$out" ]'
+out=$(echo junk | HOME="$sandbox" "$SH" "$BG"); rc=$?
+check "brief guard: garbage stdin -> silent, rc=0" '[ -z "$out" ] && [ $rc -eq 0 ]'
+check "brief guard: no brief for the project -> silent" '[ -z "$(jq -nc "{tool_input:{file_path:\"/nowhere/x\"}}" | HOME="$sandbox" "$SH" "$BG")" ]'
+# The gate: a turn that edits project code and calls the task done must run the brief's
+# commands after the edit. Items without a command are not checked.
+be() { jq -nc --arg p "$1" '{type:"assistant",message:{content:[{type:"tool_use",name:"Edit",input:{file_path:$p}}]}}'; }
+{ cat "$bt"; be "$bp/src/app.js"; say "Done. The form now rejects an empty email."; } > "$eg/b1.jsonl"
+out=$(gate "$eg/b1.jsonl")
+check "gate: task called done, brief command not run -> block naming the item" 'blocks "$out" && jq -r .reason <<<"$out" | grep -qF "SH=/bin/bash bash tests/run.sh -v" && ! jq -r .reason <<<"$out" | grep -qF "empty email"'
+{ cat "$bt"; be "$bp/src/app.js"; tc Bash "bash tests/run.sh 2>&1 | tail -1"; say "Done."; } > "$eg/b2.jsonl"
+check "gate: the brief command ran after the edit -> allowed" '[ -z "$(gate "$eg/b2.jsonl")" ]'
+{ cat "$bt"; tc Bash "bash tests/run.sh"; be "$bp/src/app.js"; say "Done."; } > "$eg/b3.jsonl"
+check "gate: the brief command ran BEFORE the last edit -> block" 'blocks "$(gate "$eg/b3.jsonl")"'
+{ u "go"; be "$bp/src/app.js"; say "Done."; } > "$eg/b4.jsonl"
+check "gate: a session that never saw the brief is not held to it" '[ -z "$(gate "$eg/b4.jsonl")" ]'
+{ cat "$bt"; be "$bp/src/app.js"; say "Changed the handler; next I wire the form."; } > "$eg/b5.jsonl"
+check "gate: a turn that does not call the task done is not held to the brief" '[ -z "$(gate "$eg/b5.jsonl")" ]'
 
 # --- prompts agree with the hook ----------------------------------------------
 check "/summary has an 'all' overview mode" "grep -q 'argument is exactly \`all\`' \"$CMDS/summary.md\""
