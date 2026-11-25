@@ -27,6 +27,9 @@ build their own. Part of the **Harness Operator** project. It targets
 | **`/brief`** | Before work starts, turns a request into a short brief you confirm in one read: the task in your words, your focus (`/brief UI is the most important part`), the goal, checkable "done means", scope, what not to touch, and its assumptions. A compacted session is pointed back at it. | You type it |
 | **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
 
+**New here?** [docs/GUIDE.md](docs/GUIDE.md) explains every skill, walks through eight
+situations where they change the outcome, and makes the case for running them.
+
 ---
 
 ## Why
