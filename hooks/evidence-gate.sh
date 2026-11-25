@@ -100,6 +100,41 @@ need "a successful build" '\b(builds? (cleanly|fine|successfully)|compiles?( cle
   '\b(build|make|tsc|compile|cargo|go build|gradle|mvn|xcodebuild|vite|webpack|esbuild|bun build|php -l|bash -n)\b' \
   "Run the build and quote its last line."
 
+# The task brief (/brief) says what done means. When a turn that changed project code
+# ends by calling the task done, every "Done means" item that names a command in
+# backticks must have run after the last edit. The brief is found the way the brief guard
+# finds it (the checkpoint folder of the last edited file's project), and binds only a
+# session whose transcript names it.
+# shortcut: items without a command ("the form shows an error") can't be matched to a
+# tool call and are left to the model; upgrade if screenshots get a convention.
+if [ "$last_edit" -gt 0 ] && printf '%s\n' "$prose" |
+   grep -qiE '^[[:space:]]*(ok|done)\b|\b(task|work|it|everything|all) (is )?(now )?(done|complete|finished)\b|\bdone means\b|\b(implemented|completed)\b'; then
+  last_path=$(printf '%s\n' "$tools" | sed -n "${last_edit}p" | cut -f3)
+  e=$(dirname "$last_path"); while [ ! -d "$e" ] && [ "$e" != / ]; do e=$(dirname "$e"); done
+  root=$(git -C "$e" rev-parse --show-toplevel 2>/dev/null) || root=$(cd "$e" 2>/dev/null && pwd -P)
+  brief="$HOME/.claude/checkpoints/$(printf '%s' "$root" | sed 's#[^A-Za-z0-9]#-#g')/BRIEF.md"
+  if [ -n "$root" ] && [ -f "$brief" ] && grep -qF -- "$brief" "$transcript"; then
+    runner='^(\./.*|bash|sh|zsh|npm|npx|bun|bunx|node|deno|yarn|pnpm|make|pytest|python3?|php|go|cargo|curl|wget|gh|git|swift|xcodebuild|tox|rspec|jest|vitest|mvn|gradle|docker|ruby|composer|playwright)$'
+    set -f   # backticked commands hold globs (tests/*.sh): split them, never expand
+    while IFS= read -r item; do
+      for c in $(printf '%s\n' "$item" | grep -oE '`[^`]+`' | tr -d '`' | tr ' ' '\037'); do
+        # A command's key is its program and its first argument that isn't a flag, after
+        # any VAR=value prefix: "SH=/bin/bash bash tests/x.sh -v" -> bash + tests/x.sh.
+        # shellcheck disable=SC2046 # split on purpose; globbing is off (set -f)
+        set -- $(printf '%s' "$c" | tr '\037' ' ')
+        while [ $# -gt 0 ] && case "$1" in (*=*) true ;; (*) false ;; esac; do shift; done
+        [ $# -gt 0 ] && printf '%s' "$1" | grep -qE "$runner" || continue
+        w=$1; shift; arg=""
+        for a in "$@"; do case "$a" in (-*) ;; (*) arg=$a; break ;; esac; done
+        printf '%s\n' "$after_edit" | cut -f2 | grep -F -- "$w" | grep -qF -- "${arg:-$w}" && continue
+        missing="$missing
+- Brief \"Done means\": $(printf '%s' "$item" | sed -E 's/^[[:space:]]*- \[.\] *//') — \`$(printf '%s' "$c" | tr '\037' ' ')\` was not run after the last edit. Run it and quote the result, or say which item is still open."
+      done
+    done <<<"$(awk '/^## /{on = ($0 ~ /^## Done means/); next} on && /^[[:space:]]*- /' "$brief")"
+    set +f
+  fi
+fi
+
 [ -z "$missing" ] && exit 0
 reason="Evidence gate: your final reply makes claims this turn never checked:$missing
 Run the checks now and report what they show, or reword each claim as UNVERIFIED. If the proof is from an earlier turn, say which turn and what it showed. You get this message once per stop."

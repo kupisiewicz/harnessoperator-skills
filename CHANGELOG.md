@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The brief is enforced, not just written.** A new `PreToolUse` hook, `hooks/brief-guard.sh`, refuses Edit, Write, MultiEdit, NotebookEdit and lean-ctx patches to any path or glob written in backticks under the brief's "Don't touch", and tells the model to ask before changing the brief. When a turn that changed code calls the task done, the evidence gate now checks that every command in backticks under "Done means" ran after the last edit, and names the items that didn't. Both bind only a session whose transcript names the brief, so a brief left from an old task never blocks unrelated work. Prose items stay advisory, and shell writes are not checked. `HO_BRIEF_GUARD=off` disables the guard.
+
 - **`/lesson mine`**: a correction copied into forked or resumed sessions is listed once, not once per copy. The copies keep their timestamp and session id, which is what the dedupe matches on. On the first real run, one message showed up 17 times; across 615 transcripts the hits went from 113 to 71.
 
 - **`/lesson mine [days] [all]`**: finds the corrections nobody filed. `scripts/lesson-mine.sh` reads this project's session transcripts (or every project's with `all`, last 30 days by default) and lists the typed messages that read like corrections, newest first, each with the end of the reply it answered. Hook notes, tool output, agent and scheduled-task messages, sidechains, forwarded tasks, pasted text, bare "stop" and a "no" answering a question are left out. These filters were tuned on real transcripts. The model groups repeats, drops what an existing rule covers, and files only the lessons the user picks.
