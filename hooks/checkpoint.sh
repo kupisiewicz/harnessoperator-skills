@@ -136,8 +136,21 @@ case "$event" in
           | while IFS= read -r f; do d=$(dirname "$f"); case " $seen " in (*" $d "*) continue ;; esac
               seen="$seen $d"; echo "$f ($(age "$f") old)"; done | head -3 | paste -sd ';' - | sed 's/;/; /g')
         [ -n "$recent" ] && ctx="${ctx:+$ctx }Newest checkpoints of projects inside this folder: $recent."
+        [ -n "$ctx" ] && ctx="$ctx Read one only if the user resumes earlier work or runs /summary."
+        # A folder holding several repos is a workspace, not a project: the work belongs to
+        # one of them, and its CLAUDE.md, tests and checkpoint folder only apply once the
+        # session is in it. Working from inside it also files the compact checkpoint there,
+        # since the hook weighs the transcript's working directories. Two repos is the bar,
+        # so a plain non-repo project (with no repos below it) is never treated as one.
+        # Repos ordered by .git mtime, a cheap proxy for recent git activity.
+        repos=$(cd "$cwd" 2>/dev/null && ls -td -- */.git 2>/dev/null | sed 's#/\.git$##')
+        n=$(printf '%s' "$repos" | grep -c .)
+        if [ "$n" -ge 2 ]; then
+          names=$(printf '%s\n' "$repos" | head -5 | paste -sd ',' - | sed 's/,/, /g')
+          ctx="${ctx:+$ctx }This folder is not a project: it holds $n git repos. Before the first edit or command, settle which project the task is in. Take it from the user's message if it names the project or its files; otherwise ask in one line, offering the likely ones (recently active: $names). Then cd into it, read its CLAUDE.md if it has one, and keep the work there, so its rules apply and its checkpoints land in its own folder."
+        fi
       fi
-      [ -n "$ctx" ] && ctx="$ctx Read one only if the user resumes earlier work or runs /summary."
+      [ -n "$ctx" ] && [ -z "$umbrella" ] && ctx="$ctx Read one only if the user resumes earlier work or runs /summary."
       dec=$(decisions "$dir"); [ -n "$dec" ] && ctx="${ctx:+$ctx }$dec"
       [ -z "$ctx" ] && exit 0
     else

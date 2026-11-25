@@ -383,6 +383,12 @@ Turn it off for one session with `HO_EVIDENCE_GATE=off`.
   holds many projects (`~/code` with `api/`, `web/`, …) is filed under the project it
   touched most, judged from the transcript's file paths and working directories. A new
   session there is pointed at the three newest project checkpoints below it.
+- **Project picking at session start.** When the folder holds two or more git repos,
+  a new session is told it is a workspace, not a project. Before its first edit or
+  command, it settles which project the task is in: from your message if it names one
+  or its files, otherwise by asking you in one line, with the five most recently active
+  repos offered. Then it works from inside that project, so the project's `CLAUDE.md`
+  applies and its checkpoints land in its own folder.
 - **Never inside your repo,** so checkpoints never dirty a working tree or get
   committed by accident.
 - **PreCompact** hardlinks the live transcript: it uses no extra disk while the
@@ -460,7 +466,7 @@ checkpoints stay in `~/.claude/checkpoints/`; delete that folder to remove them 
 bash tests/test-checkpoint.sh
 ```
 
-171 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
+174 black-box tests run the real hook, helper scripts, installer and uninstaller against a temporary
 `HOME`, so your own `~/.claude` is never touched. They cover hardlinks, retention,
 session-aware pointers, path handling, permissions, installer idempotency and
 uninstall. CI runs them on Ubuntu and macOS, and runs ShellCheck. See

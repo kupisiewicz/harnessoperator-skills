@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Project picking at session start**: a new session in a non-repo folder that holds two or more git repos is told it is in a workspace, not a project. Before the first edit or command, it settles which project the task is in: from the user's message, or by asking in one line with the five most recently active repos offered. It then works from inside that project, so the project's `CLAUDE.md` applies and its checkpoints are filed there. A plain non-repo project, with fewer than two repos below it, is not affected.
+
 - **Evidence gate**: edits to temp files (the session scratchpad, `/tmp`, `/var/folders`) no longer make an earlier check stale. They sit outside the project, so they can't change what the check proved. Found when a helper script written after the test run triggered a false alarm. Covered by a regression test.
 
 - **`/brief [task and/or focus]`**: before work starts, writes the task back as a brief the user confirms: the task and focus in their words, the goal, checkable "Done means", in and out of scope, what not to touch, assumptions and blocking questions. A focus such as `/brief UI is the most important part` changes priority, not scope. It is saved as `BRIEF.md` beside the checkpoints, with earlier briefs archived. A compacted session is pointed back at it, and `/checkpoint` takes its Goal from it.
