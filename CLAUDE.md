@@ -26,12 +26,12 @@ bash tests/test-checkpoint.sh
 
 ## Layout
 
-`commands/` (8 files) · `compact/` (1 file) · `hooks/` (2 files) · `scripts/` (4 files) · `tests/` (1 file)
+`commands/` (8 files) · `compact/` (1 file) · `docs/` (1 file) · `hooks/` (2 files) · `scripts/` (4 files) · `tests/` (1 file)
 
 ## Where the detail is
 
 README.md covers: Why · Quick start · How to use them · How it works · Configuration · Safety and privacy · Uninstall · Troubleshooting · Development · Roadmap · License.
-Other docs: `CONTRIBUTING.md`, `SECURITY.md`.
+Other docs: `docs/GUIDE.md` (every skill, eight use cases, why), `CONTRIBUTING.md`, `SECURITY.md`. Keep the guide's counts and skill list in step when a skill is added.
 
 ## Rules
 
