@@ -80,7 +80,11 @@ def flat: gsub("[\r\n\t]+"; " ⏎ ");
 | [ .ts[0:16], .s[0:8], ($score | tostring), (.u | flat | .[0:300]), (.a | flat | .[-160:]) ] | @tsv
 '
 
-out=$(printf '%s\n' "$files" | while IFS= read -r f; do jq -Rnr "$program" "$f" 2>/dev/null; done | sort -r)
+# A forked or resumed session copies the earlier messages into its own transcript, keeping
+# their timestamp and session id, so one correction can appear in many files. Keep one per
+# timestamp + session + text. Seen live: one message 17 times.
+out=$(printf '%s\n' "$files" | while IFS= read -r f; do jq -Rnr "$program" "$f" 2>/dev/null; done |
+  sort -r | awk -F'\t' '!seen[$1 FS $2 FS $4]++')
 n=$(printf '%s' "$out" | grep -c .)
 nf=$(printf '%s\n' "$files" | grep -c .)
 echo "Scanned $nf transcripts from the last $days days ($scope). $n messages read like corrections; newest first, at most $MAX."

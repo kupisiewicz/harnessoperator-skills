@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **`/lesson mine`**: a correction copied into forked or resumed sessions is listed once, not once per copy. The copies keep their timestamp and session id, which is what the dedupe matches on. On the first real run, one message showed up 17 times; across 615 transcripts the hits went from 113 to 71.
+
 - **`/lesson mine [days] [all]`**: finds the corrections nobody filed. `scripts/lesson-mine.sh` reads this project's session transcripts (or every project's with `all`, last 30 days by default) and lists the typed messages that read like corrections, newest first, each with the end of the reply it answered. Hook notes, tool output, agent and scheduled-task messages, sidechains, forwarded tasks, pasted text, bare "stop" and a "no" answering a question are left out. These filters were tuned on real transcripts. The model groups repeats, drops what an existing rule covers, and files only the lessons the user picks.
 
 - **Evidence gate**: "fixed" before a noun ("a fixed version", "fixed width", "a fixed mix") means pinned or constant, not repaired, and is no longer read as a claim that a fix works. "The bug is fixed" still needs a check. This was the gate's third false alarm in live use, and it is now a regression test.
