@@ -343,11 +343,12 @@ lu() { jq -nc --arg t "$1" --arg ts "$2" '{type:"user",sessionId:"sess1234x",tim
   lu "Task (from the session that started this one): never merge, I told you" "2026-11-20T10:07:00Z"
   jq -nc '{type:"user",isSidechain:true,message:{content:"No, I told you already"}}'
   echo 'not json'; } > "$ltd/s1.jsonl"
+cp "$ltd/s1.jsonl" "$ltd/s1-fork.jsonl"   # a forked session carries the same messages
 lu "Why did you delete it? I told you to keep it." "2020-01-01T00:00:00Z" > "$ltd/s0.jsonl"; touch -t 202001010000 "$ltd/s0.jsonl"
 mout=$(cd "$lp" && HOME="$lh" "$SH" "$LM" 2>&1); rc=$?
 check "lesson-mine: finds the typed correction, with the reply it answered" '[ $rc -eq 0 ] && grep -qF "USER: No, I told you to use bun" <<<"$mout" && grep -qF "AFTER: …I installed it with npm." <<<"$mout" && grep -qF "sess1234" <<<"$mout"'
-check "lesson-mine: exactly one candidate (no answers, orders, hook notes, tool output, agents, forwarded tasks, sidechains)" 'grep -c "USER:" <<<"$mout" | grep -qx 1'
-check "lesson-mine: transcripts older than the window are skipped" '! grep -qF "Why did you delete" <<<"$mout" && grep -qF "Scanned 1 transcripts from the last 30 days" <<<"$mout"'
+check "lesson-mine: exactly one candidate, even with a forked copy (no answers, orders, hook notes, tool output, agents, forwarded tasks, sidechains)" 'grep -c "USER:" <<<"$mout" | grep -qx 1 && grep -qF "1 messages read like corrections" <<<"$mout"'
+check "lesson-mine: transcripts older than the window are skipped" '! grep -qF "Why did you delete" <<<"$mout" && grep -qF "Scanned 2 transcripts from the last 30 days" <<<"$mout"'
 mout=$(cd "$lp" && HOME="$lh" "$SH" "$LM" 100000 2>&1)
 check "lesson-mine: a wider window finds the older one, newest first" 'grep -qF "Why did you delete" <<<"$mout" && [ "$(grep -m1 "USER:" <<<"$mout" | grep -c bun)" = 1 ]'
 ( cd "$lp" && HOME="$lh" "$SH" "$LM" lots >/dev/null 2>&1 ); rc=$?
