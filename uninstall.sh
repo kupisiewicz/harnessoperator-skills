@@ -27,7 +27,7 @@ if [ -f "$settings" ] && jq empty "$settings" 2>/dev/null; then
   say "hooks removed from $settings"
 fi
 
-rm -f "$hook" "$(dirname "$hook")/evidence-gate.sh" "$(dirname "$hook")/brief-guard.sh"
+rm -f "$hook" "$(dirname "$hook")/evidence-gate.sh" "$(dirname "$hook")/brief-guard.sh" "$(dirname "$hook")/source"
 for f in "$repo"/scripts/*.sh; do rm -f "$(dirname "$hook")/$(basename "$f")"; done
 rmdir "$(dirname "$hook")" 2>/dev/null || true; say "hook and helpers removed"
 

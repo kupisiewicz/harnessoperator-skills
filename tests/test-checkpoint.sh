@@ -191,7 +191,7 @@ inst() { HOME="$1" "$SH" "$REPO/install.sh" >/dev/null 2>&1; }
 inst "$ih"; inst "$ih"; cp "$C/CLAUDE.md" "$sandbox/md2"; inst "$ih"
 count() { jq --arg c "$IH" "[.hooks.$1[]?.hooks[] | select(.command==\$c)] | length" "$S"; }
 check "install: hook installed and executable" '[ -x "$IH" ]'
-check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ] && [ -f "$C/commands/decision.md" ] && [ -f "$C/commands/brief.md" ]'
+check "install: commands installed" '[ -f "$C/commands/checkpoint.md" ] && [ -f "$C/commands/summary.md" ] && [ -f "$C/commands/swarm.md" ] && [ -f "$C/commands/context-audit.md" ] && [ -f "$C/commands/compact-check.md" ] && [ -f "$C/commands/lesson.md" ] && [ -f "$C/commands/decision.md" ] && [ -f "$C/commands/brief.md" ] && [ -f "$C/commands/doctor.md" ] && [ -f "$C/commands/cure.md" ]'
 check "install: helper scripts beside the hook, executable" '[ -x "$(dirname "$IH")/context-inventory.sh" ] && [ -x "$(dirname "$IH")/compact-check.sh" ] && [ -x "$(dirname "$IH")/lesson-search.sh" ] && [ -x "$(dirname "$IH")/decision-log.sh" ] && [ -x "$(dirname "$IH")/lesson-mine.sh" ]'
 for e in PreCompact PostCompact SessionStart; do
   check "install x3: exactly one $e entry (idempotent)" '[ "$(count $e)" = 1 ]'
@@ -224,7 +224,7 @@ mkdir -p "$C/checkpoints/x"; echo keep > "$C/checkpoints/x/latest.md"
 HOME="$ih" "$SH" "$REPO/uninstall.sh" >/dev/null 2>&1
 check "uninstall: our hooks removed" '[ "$(count PreCompact)$(count PostCompact)$(count SessionStart)$(gcount Stop)" = 0000 ] && [ ! -e "$IG" ] && [ ! -e "$IBG" ] && [ "$(jq "[.hooks.PreToolUse[]?] | length" "$S")" = 0 ]'
 check "uninstall: other hooks and settings kept" 'jq -e ".model==\"keep\" and ([.hooks.SessionStart[].hooks[].command] | index(\"other-tool\"))" "$S" >/dev/null'
-check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ] && [ ! -e "$C/commands/decision.md" ] && [ ! -e "$C/commands/brief.md" ]'
+check "uninstall: hook, helper and commands removed" '[ ! -e "$IH" ] && [ ! -e "$(dirname "$IH")" ] && [ ! -e "$C/commands/checkpoint.md" ] && [ ! -e "$C/commands/summary.md" ] && [ ! -e "$C/commands/swarm.md" ] && [ ! -e "$C/commands/context-audit.md" ] && [ ! -e "$C/commands/compact-check.md" ] && [ ! -e "$C/commands/lesson.md" ] && [ ! -e "$C/commands/decision.md" ] && [ ! -e "$C/commands/brief.md" ] && [ ! -e "$C/commands/cure.md" ]'
 check "uninstall: compact block removed, own content kept" '! grep -q harnessoperator "$C/CLAUDE.md" && grep -q "keep me" "$C/CLAUDE.md"'
 check "uninstall: checkpoints kept" '[ -f "$C/checkpoints/x/latest.md" ]'
 
@@ -510,6 +510,48 @@ check "gate: the brief command ran BEFORE the last edit -> block" 'blocks "$(gat
 check "gate: a session that never saw the brief is not held to it" '[ -z "$(gate "$eg/b4.jsonl")" ]'
 { cat "$bt"; be "$bp/src/app.js"; say "Changed the handler; next I wire the form."; } > "$eg/b5.jsonl"
 check "gate: a turn that does not call the task done is not held to the brief" '[ -z "$(gate "$eg/b5.jsonl")" ]'
+
+# --- /doctor finds, /cure fixes -------------------------------------------------------
+# A real install in its own home; each case breaks one thing, doctor must name it with the
+# right fix, and that fix must make the next doctor run say OK.
+dh="$sandbox/dochome"; DC="$dh/.claude"; DS="$DC/settings.json"; DH="$DC/hooks/harnessoperator"
+mkdir -p "$DC"; echo '{"model":"keep"}' > "$DS"; inst "$dh"
+doc()  { (cd "$dh" && HOME="$dh" "$SH" "$DH/doctor.sh"); }
+cure() { HOME="$dh" "$SH" "$DH/cure.sh" "$@"; }
+check "install: records its checkout for /doctor and /cure" '[ "$(cat "$DH/source")" = "$REPO" ] && [ -x "$DH/doctor.sh" ] && [ -x "$DH/cure.sh" ]'
+out=$(doc); rc=$?
+check "doctor: a fresh install is healthy (0 fail, 0 warn), rc=0" '[ $rc -eq 0 ] && printf "%s\n" "$out" | tail -1 | grep -q "doctor: 0 fail, 0 warn"'
+chmod -x "$DH/evidence-gate.sh"; out=$(doc)
+check "doctor: a hook that isn't executable -> FAIL with a safe chmod fix" 'printf "%s\n" "$out" | grep -q "^FAIL hook:evidence-gate.sh" && printf "%s\n" "$out" | grep -qF "fix (safe): bash ~/.claude/hooks/harnessoperator/cure.sh chmod $DH/evidence-gate.sh"'
+cure chmod "$DH/evidence-gate.sh" >/dev/null
+check "cure chmod: fixes it, doctor is healthy again" '[ -x "$DH/evidence-gate.sh" ] && doc | tail -1 | grep -q "0 fail, 0 warn"'
+check "cure chmod: refuses a file outside the hooks folder" '! cure chmod "$DS" 2>/dev/null && [ ! -x "$DS" ]'
+jq 'del(.hooks.Stop)' "$DS" > "$DS.t" && mv "$DS.t" "$DS"; out=$(doc)
+check "doctor: an unwired hook -> FAIL wiring:Stop with the safe reinstall fix" 'printf "%s\n" "$out" | grep -q "^FAIL wiring:Stop" && printf "%s\n" "$out" | grep -qF "fix (safe): bash ~/.claude/hooks/harnessoperator/cure.sh reinstall"'
+cure reinstall >/dev/null 2>&1
+check "cure reinstall: rewires it, keeps other settings" 'doc | tail -1 | grep -q "0 fail, 0 warn" && [ "$(jq -r .model "$DS")" = keep ]'
+jq '.env = {HO_EVIDENCE_GATE: "off", KEEP: "1"} | .hooks.Stop += [{hooks: [{type: "command", command: "bash /nowhere/gone.sh"}]}]' "$DS" > "$DS.t" && mv "$DS.t" "$DS"
+out=$(doc)
+check "doctor: gate switched off in settings -> WARN with an ask fix" 'printf "%s\n" "$out" | grep -q "^WARN off:HO_EVIDENCE_GATE" && printf "%s\n" "$out" | grep -qF "fix (ask): bash ~/.claude/hooks/harnessoperator/cure.sh unset-env HO_EVIDENCE_GATE"'
+check "doctor: a hook whose script is gone -> WARN dead-hook with an ask fix" 'printf "%s\n" "$out" | grep -q "^WARN dead-hook.*/nowhere/gone.sh" && printf "%s\n" "$out" | grep -qF "remove-hook '"'"'bash /nowhere/gone.sh'"'"'"'
+cure unset-env HO_EVIDENCE_GATE >/dev/null; cure remove-hook "bash /nowhere/gone.sh" >/dev/null
+check "cure unset-env + remove-hook: only those removed, settings backed up" \
+  'doc | tail -1 | grep -q "0 fail, 0 warn" && [ "$(jq -r .env.KEEP "$DS")" = 1 ] && [ "$(jq "[.hooks.Stop[].hooks[]] | length" "$DS")" = 1 ] && ls "$DS".bak-harnessoperator-* >/dev/null 2>&1'
+check "cure unset-env: refuses a variable that isn't HO_*" '! cure unset-env PATH 2>/dev/null'
+cp "$DS" "$sandbox/ds-good"; printf '{broken' > "$DS"; out=$(doc)
+check "doctor: unparseable settings.json -> FAIL with an ask restore fix" 'printf "%s\n" "$out" | grep -q "^FAIL settings" && printf "%s\n" "$out" | grep -qF "cure.sh restore-settings"'
+cure restore-settings >/dev/null
+check "cure restore-settings: newest valid backup back, broken file kept" 'jq empty "$DS" 2>/dev/null && ls "$DS".broken-* >/dev/null 2>&1 && doc | tail -1 | grep -q "0 fail"'
+dproj="$DC/checkpoints/$(printf '%s' "$(cd "$dh" && pwd -P)" | sed 's#[^A-Za-z0-9]#-#g')"; mkdir -p "$dproj"
+printf '# Brief\n' > "$dproj/BRIEF.md"; touch -t 202601010000 "$dproj/BRIEF.md"; out=$(doc)
+check "doctor: a brief weeks old -> WARN with an ask archive fix" 'printf "%s\n" "$out" | grep -q "^WARN brief" && printf "%s\n" "$out" | grep -qF "archive-brief $dproj"'
+cure archive-brief "$dproj" >/dev/null
+check "cure archive-brief: moved aside as BRIEF-<date>.md" '[ ! -f "$dproj/BRIEF.md" ] && ls "$dproj"/BRIEF-2026-01-01_*.md >/dev/null 2>&1'
+rm "$DH/source"; out=$(doc)
+check "doctor: no recorded checkout -> WARN, and its fixes turn manual" 'printf "%s\n" "$out" | grep -q "^WARN source" && ! printf "%s\n" "$out" | grep -q "fix (safe): .*reinstall"'
+check "cure: an unknown fix is refused, rc=1" '! cure frobnicate 2>/dev/null'
+check "/doctor is read-only and points to /cure" "grep -qF 'hooks/harnessoperator/doctor.sh' \"$CMDS/doctor.md\" && grep -qi 'read-only' \"$CMDS/doctor.md\" && grep -qF '/cure' \"$CMDS/doctor.md\""
+check "/cure fixes only through cure.sh, asks for ask fixes, re-checks" "grep -qF 'cure.sh' \"$CMDS/cure.md\" && grep -qi 'never through a hand edit' \"$CMDS/cure.md\" && grep -qi 'second doctor run' \"$CMDS/cure.md\""
 
 # --- prompts agree with the hook ----------------------------------------------
 check "/summary has an 'all' overview mode" "grep -q 'argument is exactly \`all\`' \"$CMDS/summary.md\""

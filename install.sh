@@ -48,6 +48,9 @@ cp "$repo/hooks/brief-guard.sh" "$guard"; chmod +x "$guard"; say "hook: $guard"
 for f in "$repo"/scripts/*.sh; do
   cp "$f" "$(dirname "$hook")/"; chmod +x "$(dirname "$hook")/$(basename "$f")"; say "helper: $(basename "$f")"
 done
+# Where this came from: /doctor compares the installed copies with it, and /cure
+# re-runs this installer from it.
+printf '%s\n' "$repo" > "$(dirname "$hook")/source"
 
 # 3. Wiring. Drop any earlier entry that runs our hook, then add one per event, so
 #    re-running never duplicates. Other hooks in the file are left untouched.
