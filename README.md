@@ -1,54 +1,87 @@
 # harnessoperator-skills
 
-<p><strong>Stop typing the same instructions.<br>
-Make each one a single command.</strong></p>
+<p><strong>Your coding agent forgets, guesses and says "done" too early.<br>
+These skills make it remember, agree and prove.</strong></p>
 
-Skills, hooks and instructions for people who run AI coding harnesses all day, or
-build their own. Part of the **Harness Operator** project. It targets
-[Claude Code](https://docs.claude.com/en/docs/claude-code) and solves two problems:
+**What this is:** add-ons for [Claude Code](https://docs.claude.com/en/docs/claude-code)
+that fix the ways long agent sessions go wrong. They include 10 slash commands and 3 hooks
+that run on their own. You install them with one script. They need only `bash` and `jq`,
+and nothing leaves your machine.
 
-- **Long sessions lose track of their work.** That's compact, `/checkpoint`, `/summary` and `/compact-check`.
-- **Staffing subagents takes a paragraph every time.** That's `/swarm`.
-- **"Tests pass" and "deployed" get said without being checked.** That's the evidence gate.
-- **The same correction gets typed again next week.** That's `/lesson`.
-- **A settled choice gets argued again in the next session.** That's `/decision`.
-- **The model builds the wrong thing, or the right thing with the wrong priorities.** That's `/brief`.
-- **A hook breaks silently, so a feature is off and nobody knows.** That's `/doctor` and `/cure`.
+**Who it's for:** anyone who runs AI coding agents for hours a day, across many projects:
+"harness operators".
 
-| Skill | What it does | How it runs |
-|---|---|---|
-| **compact** | Turns every compaction into a resumable checkpoint, saves it to disk, keeps the raw transcript, and warns when the summary skipped something. | Automatic, on every `/compact` and auto-compact |
-| **`/checkpoint`** | Writes a verified, structured `CHECKPOINT.md`: done, in progress, not started, decisions, gotchas, and where to resume. | You type it |
-| **`/summary`** | Shows what's done, in progress and not started, from the latest checkpoint, checked against live git state. `/summary all` covers every project. | You type it |
-| **`/swarm N`** | Splits a task across N subagents with a fixed model mix: ⅔ Sonnet for lighter work, ⅓ Opus for heavier work, and from N = 7 a Fable reviewer per 10 agents that checks everyone's output. | You type it |
-| **`/context-audit`** | Measures everything loaded before your first message (CLAUDE.md, memory, hooks, skills, MCP), finds contradictions, duplicates, stale claims and dead paths, and proposes fixes it applies only on your approval. | You type it |
-| **`/compact-check`** | Says whether to compact and whether it's safe right now: context size measured from the transcript, plus work in flight, uncommitted or unpushed work, and checkpoint age. Three lines, read-only. | You type it |
-| **`/lesson`** | Turns a correction into one rule, with its why and how to apply it. It checks every existing rule for a duplicate or a conflict, then files the rule once: in global or project `CLAUDE.md`, or in memory. | You type it |
-| **`/decision`** | Keeps a per-project, append-only `DECISIONS.md`: what was decided, by whom, why, and what was rejected. A later decision supersedes an earlier one but never rewrites it. Every new session is told how many decisions are in force. `/checkpoint` adds its decisions automatically. | You type it (and `/checkpoint`) |
-| **`/brief`** | Before work starts, turns a request into a short brief you confirm in one read: the task in your words, your focus (`/brief UI is the most important part`), the goal, checkable "done means", scope, what not to touch, and its assumptions. A compacted session is pointed back at it. | You type it |
-| **`/doctor`** | Checks that the setup works: jq, `settings.json`, each hook installed, current, wired once and passing a smoke test, the commands and compact instructions, gates switched off, hooks pointing at missing scripts, and this project's checkpoint and brief. Each problem comes with its fix. Read-only. | You type it |
-| **`/cure`** | Fixes what `/doctor` finds. It applies the safe fixes, asks once for the rest (`/cure all` skips the question) and spells out the manual ones. Every fix is a tested, backed-up step in `cure.sh`. Then it checks again and shows before → after. | You type it, after `/doctor` |
-| **evidence gate** | When a reply claims tests pass, something is deployed, merged, fixed or builds, it checks that this turn ran something that shows it, after the last code edit. If not, it sends the model back once to prove it or mark the claim UNVERIFIED. | Automatic, on every stop |
-
-**New here?** [docs/GUIDE.md](docs/GUIDE.md) explains every skill, walks through eight
-situations where they change the outcome, and makes the case for running them.
+**What changes:** work survives compaction and new sessions. The agent confirms the task
+before it builds. It can't say "tests pass" or "deployed" without a check. And the setup
+tells you when something in it is broken.
 
 ---
 
-## Why
+## The skills, in three groups
 
-When a Claude Code session fills its context, it **compacts**: the conversation is
-replaced by a summary the model writes for itself. That summary is a narrative. It
-often loses the exact stopping point, the branch that was never pushed, the approach
-that already failed. And it lives only in the session that wrote it.
+### 1. Remember: nothing is lost between sessions
 
-So you end up typing the same thing again and again:
+When the context fills up, Claude Code replaces the conversation with a summary, and the
+exact stopping point, the unpushed branch and the failed approach go with it. These skills
+keep the state on disk instead.
 
-> *"Prepare me a detailed summary of all the work done here, what is in progress and
-> what is not started yet."*
+| Skill | What it does | How it runs |
+|---|---|---|
+| **compact** | Turns every compaction into a resumable checkpoint file and keeps the raw transcript. It warns when the summary skipped something. | Automatic |
+| **`/checkpoint`** | Writes a verified record: done, in progress, not started, decisions, gotchas, and where to resume. | You type it |
+| **`/summary`** | Answers "where are we?" from the checkpoint, checked against live git. `/summary all` covers every project. | You type it |
+| **`/compact-check`** | Answers in three lines: should I compact, and is it safe right now? | You type it |
+| **`/decision`** | Logs a settled choice once, with the reason. Every new session is told it's in force. | You type it |
+| **`/lesson`** | Turns a correction into one rule, filed once. `/lesson mine` finds the corrections you never filed. | You type it |
 
-These skills make that one word, and they make compaction itself produce something
-you can resume from, in this session or in a brand-new one.
+### 2. Prove: the agent builds what you asked and shows it works
+
+| Skill | What it does | How it runs |
+|---|---|---|
+| **`/brief`** | Before any code, writes the task back as a short brief you confirm: your words, your focus, checkable "done means", scope, what not to touch. | You type it |
+| **brief guard** | Blocks edits to anything the brief lists under "Don't touch". | Automatic |
+| **evidence gate** | When the agent claims "tests pass", "deployed", "merged" or "fixed", it checks that this turn actually ran something that shows it. If not, it sends the agent back once. It also holds "done" to the brief's checks. | Automatic |
+
+### 3. Run: operate the harness at scale and keep it healthy
+
+| Skill | What it does | How it runs |
+|---|---|---|
+| **`/swarm N`** | Splits a task across N subagents with a fixed model mix and a reviewer who checks their output. | You type it |
+| **`/context-audit`** | Measures everything loaded before your first message and finds contradictions, duplicates and stale rules. It fixes them only with your OK. | You type it |
+| **`/doctor`** | Checks that every hook, setting and command is installed, wired and working, and names the fix for each problem. | You type it |
+| **`/cure`** | Applies `/doctor`'s fixes. Safe ones run on their own; the rest need your OK. Then it checks again. | You type it |
+| **project picking** | In a folder holding many repos, a new session settles which project it's in before its first edit. | Automatic |
+
+**New here?** [docs/GUIDE.md](docs/GUIDE.md) explains every skill in depth and makes the
+case for running them.
+
+## How to use them: one working day
+
+```
+morning     /summary all              what's open in every project, and the next step
+start task  /brief UI matters most    agree on the task; nothing is built until you say go
+work        (automatic)               gate checks claims · guard protects files · compaction saved
+milestone   /checkpoint               a verified "last known good"
+you correct /lesson                   the correction becomes a rule, filed once
+you decide  /decision                 settled, and every later session knows it
+big job     /swarm 6 audit billing    six agents, the right models, one reviewer
+weekly      /doctor  →  /cure         is everything still working? fix what isn't
+```
+
+## Use cases
+
+| Situation | Without | With |
+|---|---|---|
+| A long refactor compacts twice | The summary forgets the unpushed branch and the failed approach. | `/summary` resumes from a verified checkpoint, checked against git. |
+| Monday morning, twelve projects | You open each one to remember where it stood. | `/summary all` gives one table: what's open, what's next. |
+| "All tests pass" | Said from memory; nobody ran them. | The gate sends the agent back to run them and quote the result. |
+| A UI-first feature | The agent polishes the backend and rushes the screen. | `/brief UI is the most important part` sets the priority before any code. |
+| A generated file | Edited by hand, then overwritten on the next build. | Listed under "Don't touch", so the guard blocks the edit. |
+| The same correction, again | You type it every week. | `/lesson` files it once; `/lesson mine` finds the ones you forgot. |
+| A choice made last week | Comes back as a fresh question. | `/decision` logs it; new sessions are told it's settled. |
+| The hooks stopped firing | Silent. You notice weeks later. | `/doctor` names the problem; `/cure` fixes it and checks again. |
+
+---
 
 ## Quick start
 
@@ -61,7 +94,7 @@ cd harnessoperator-skills
 Then **start a new Claude Code session**, since hooks load at session start.
 
 **Requirements:** `bash`, `jq` (`brew install jq` or `apt install jq`), and a Claude
-Code version with `PreCompact`, `PostCompact`, `SessionStart` and `Stop` hooks. `git` is
+Code version with `PreCompact`, `PostCompact`, `SessionStart`, `Stop` and `PreToolUse` hooks. `git` is
 optional; it is used to find the repo root and to check branch state. macOS and Linux
 are supported, and CI runs the test suite on both.
 
@@ -82,7 +115,7 @@ own entries, and backs up every file it changes first
 | `scripts/lesson-mine.sh` | `~/.claude/hooks/harnessoperator/lesson-mine.sh` (run by `/lesson mine`, not a hook) |
 | `scripts/decision-log.sh` | `~/.claude/hooks/harnessoperator/decision-log.sh` (run by `/decision`, `/checkpoint` and `/summary`, not a hook) |
 | `scripts/doctor.sh`, `scripts/cure.sh` | `~/.claude/hooks/harnessoperator/` (run by `/doctor` and `/cure`, not hooks), plus a `source` file naming the checkout it was installed from |
-| Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate) | merged into `~/.claude/settings.json` |
+| Hook entries: `PreCompact`, `PostCompact`, `SessionStart` (matcher `compact\|startup`), `Stop` (evidence gate), `PreToolUse` (brief guard, matcher `Edit\|Write\|MultiEdit\|NotebookEdit\|…ctx_patch`) | merged into `~/.claude/settings.json` |
 | `compact/compact-instructions.md` | appended to `~/.claude/CLAUDE.md` between `harnessoperator` marker comments |
 
 If your `CLAUDE.md` already has a `## Compact instructions` section that you wrote
@@ -90,7 +123,7 @@ yourself, the installer leaves it alone and tells you to merge by hand.
 
 ---
 
-## How to use them
+## Each skill in detail
 
 ### The daily loop
 
