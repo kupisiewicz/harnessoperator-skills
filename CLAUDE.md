@@ -1,8 +1,6 @@
 # harnessoperator-skills
 
-**Skills, hooks and instructions for AI coding harness operators. Starts with resumable checkpoints for Claude Code compaction: compact, /checkpoint, /summary.**
-
-Make each one a single command.</strong></p> Skills, hooks and instructions for people who run AI coding harnesses all day, or build their own. Part of the **Harness Operator** project. It targets [Claude Code](https://docs.claude.com/en/docs/claude-code) and solves two problems:
+**Claude Code add-ons for people who run AI coding agents all day. Three groups: Remember (work survives compaction and new sessions), Prove (agree the task, check every claim) and Run (swarms, context audit, /doctor and /cure). Part of the Harness Operator project.**
 
 Read [README.md](README.md) first; this file is the orientation and the rules.
 
