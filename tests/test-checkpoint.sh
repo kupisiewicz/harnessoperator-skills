@@ -129,6 +129,12 @@ check "umbrella: never claims another session's latest.md" '! ctx "$out" | grep 
 rm -r "$sandbox/.claude/checkpoints/$uslug"
 out=$(uev SessionStart u2 "$ut" | jq -c '.source="startup"' | run)
 check "umbrella: startup lists project checkpoints inside it" 'ctx "$out" | grep -qF -- "$bslug/latest.md"'
+check "umbrella: one repo below is not a workspace, no project pick" '! ctx "$out" | grep -qF "settle which project"'
+mkdir -p "$umb/gamma"; git -C "$umb/gamma" init -q
+out=$(uev SessionStart u2 "$ut" | jq -c '.source="startup"' | run)
+check "umbrella: two repos -> asks to settle the project, names them" 'ctx "$out" | grep -qF "holds 2 git repos" && ctx "$out" | grep -qF "settle which project" && ctx "$out" | grep -q "recently active: .*beta" && ctx "$out" | grep -q "recently active: .*gamma"'
+check "umbrella: hidden folders are never offered as projects" '! ctx "$out" | grep -q "recently active: .*\.wt"'
+rm -rf "$umb/gamma"
 # Hidden folders: .claude (config, no repo) is touched most but must not win; .wt is a
 # worktree container, so the repo inside it wins over alpha.
 mkdir -p "$umb/.claude/memory" "$umb/.wt/feat"; git -C "$umb/.wt/feat" init -q
