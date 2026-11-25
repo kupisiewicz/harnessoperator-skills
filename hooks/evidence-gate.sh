@@ -54,10 +54,13 @@ prose=$(printf '%s\n' "$reply" | awk '/^[[:space:]]*```/{f=!f; next} !f' | sed -
 
 # Evidence per kind of claim: the last edit must come before the check, or the check
 # proved an older version of the code. Notes, docs and Claude's own memory are not code:
-# writing them up after the check is the normal order, so they don't reset it.
+# writing them up after the check is the normal order, so they don't reset it. Nor do
+# temp files (a scratchpad helper script that runs the commit, a /tmp note): they sit
+# outside the project, so they can't change what the check proved.
+# shortcut: a project kept under /tmp is ignored too; upgrade if anyone works there.
 tools=$(jq -r '.tools[] | [.name, (.cmd | gsub("[\n\t]"; " ")), .path] | @tsv' <<<"$turn")
 last_edit=$(printf '%s\n' "$tools" | awk -F'\t' '($1 ~ /^(Edit|Write|MultiEdit|NotebookEdit)$|ctx_patch/) &&
-  $3 !~ /\/\.claude\/|\.(md|txt)$/ {n = NR} END {print n + 0}')
+  $3 !~ /\/\.claude\/|\.(md|txt)$|^(\/private)?\/(tmp|var\/folders)\/|\/scratchpad\// {n = NR} END {print n + 0}')
 after_edit=$(printf '%s\n' "$tools" | awk -F'\t' -v e="$last_edit" 'NR > e')
 ran() { printf '%s\n' "$after_edit" | grep -qiE "$1"; }
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Evidence gate**: edits to temp files (the session scratchpad, `/tmp`, `/var/folders`) no longer make an earlier check stale. They sit outside the project, so they can't change what the check proved. Found when a helper script written after the test run triggered a false alarm. Covered by a regression test.
+
 - **`/brief [task and/or focus]`**: before work starts, writes the task back as a brief the user confirms: the task and focus in their words, the goal, checkable "Done means", in and out of scope, what not to touch, assumptions and blocking questions. A focus such as `/brief UI is the most important part` changes priority, not scope. It is saved as `BRIEF.md` beside the checkpoints, with earlier briefs archived. A compacted session is pointed back at it, and `/checkpoint` takes its Goal from it.
 
 - **Fix: after a compact, a session could be pointed at another session's checkpoint.** Claude Code can fire SessionStart before PostCompact has written the summary. In an umbrella folder the hook then fell back to the umbrella's `latest.md`, which belonged to whichever session compacted last. It now finds the session's folder from the transcript PreCompact saved, claims `latest.md` only when its `session:` line matches, and says where the summary will land. Found live; now a regression test.
