@@ -7,7 +7,7 @@ This is the long-form companion to the [README](../README.md): what every skill 
 eight situations where they change the outcome, and why they are worth running if you
 operate AI coding agents all day. Install and configuration details stay in the README.
 
-8 commands · 2 hooks · 176 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
+8 commands · 2 hooks · 184 black-box tests · CI on Ubuntu and macOS · needs only bash and jq
 
 ---
 
@@ -162,9 +162,12 @@ rule reaches and how long it holds.
 - Searches every existing rule first. A duplicate is strengthened instead of added again,
   and a conflict goes to you.
 - Never strengthens your words: "prefer" stays a preference.
+- `/lesson mine` finds the corrections you never filed. It scans past session
+  transcripts for messages that read like corrections, groups the repeats, drops the ones
+  a rule already covers, and files only the ones you pick.
 
 **What's different:** rules don't pile up as near-copies that slowly contradict each
-other.
+other, and a correction becomes a rule even if you forgot to type `/lesson` at the time.
 
 #### `/decision [choice]`
 
@@ -349,7 +352,7 @@ over, with files, hooks and checks instead of reminders.
 - **Tuned on real sessions.** The evidence gate was replayed over 408 real turns before it
   shipped. Each false alarm it raised in live use became a regression test.
 - **No dependencies.** bash, jq and git. It runs on macOS's stock bash 3.2 and on Linux,
-  with 176 black-box tests on both in CI. Installing twice changes nothing, and uninstall
+  with 184 black-box tests on both in CI. Installing twice changes nothing, and uninstall
   removes it all.
 
 ## Install
