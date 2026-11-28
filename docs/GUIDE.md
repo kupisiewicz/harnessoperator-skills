@@ -389,7 +389,7 @@ over, with files, hooks and checks instead of reminders.
 ## Install
 
 ```bash
-git clone https://github.com/kupisiewicz/harnessoperator-skills
+git clone https://github.com/harnessoperator/harnessoperator-skills
 cd harnessoperator-skills && bash install.sh
 ```
 
