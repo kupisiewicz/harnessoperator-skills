@@ -86,7 +86,7 @@ weekly      /doctor  →  /cure         is everything still working? fix what is
 ## Quick start
 
 ```bash
-git clone https://github.com/kupisiewicz/harnessoperator-skills.git
+git clone https://github.com/harnessoperator/harnessoperator-skills.git
 cd harnessoperator-skills
 ./install.sh
 ```
